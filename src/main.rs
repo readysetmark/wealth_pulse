@@ -1,14 +1,27 @@
+extern crate core;
 #[macro_use]
 extern crate chomp;
+#[macro_use]
+extern crate decimal;
 
-use std::fs::File;
-use std::str;
+use core::str::FromStr;
 use chomp::{Input, U8Result};
 use chomp::{count, option, or, string, take_while, take_while1, token};
 use chomp::ascii::{digit};
 use chomp::buffer::{Source, Stream, StreamError};
+use decimal::d128;
+use std::fs::File;
+use std::str;
 
 // TYPES
+
+#[derive(PartialEq, Debug)]
+enum AmountFormat {
+    SymbolLeftNoSpace,
+    SymbolLeftWithSpace,
+    SymbolRightNoSpace,
+    SymbolRightWithSpace
+}
 
 #[derive(PartialEq, Debug)]
 struct Date {
@@ -23,6 +36,14 @@ struct Symbol<'a> {
     quoted: bool
 }
 
+#[derive(PartialEq, Debug)]
+struct Amount<'a> {
+    value: d128,
+    symbol: Symbol<'a>,
+    format: AmountFormat
+}
+
+
 
 // HELPERS
 
@@ -31,14 +52,14 @@ fn to_i32(slice: Vec<u8>) -> i32 {
     slice.iter().fold(0, |acc, &d| (acc * 10) + ((d - ('0' as u8)) as i32))
 }
 
-fn make_quantity(sign: u8, number: &[u8]) -> String {
+fn make_quantity(sign: u8, number: &[u8]) -> d128 {
     let mut qty = String::new();
     if sign == b'-' {
         qty.push_str(str::from_utf8(&[sign]).unwrap());
     }
     qty.push_str(str::from_utf8(number).unwrap());
-    qty.replace(",", "");
-    qty
+    qty = qty.replace(",", "");
+    d128::from_str(&qty[..]).unwrap()
 }
 
 fn is_whitespace_char(c: u8) -> bool {
@@ -137,7 +158,7 @@ fn symbol(i: Input<u8>) -> U8Result<Symbol> {
     or(i, quoted_symbol, unquoted_symbol)
 }
 
-fn quantity(i: Input<u8>) -> U8Result<String> {
+fn quantity(i: Input<u8>) -> U8Result<d128> {
     parse!{i;
         let sign = option(|i| token(i, b'-'), b'+');
         let number = take_while1(is_quantity_char);      
@@ -145,29 +166,41 @@ fn quantity(i: Input<u8>) -> U8Result<String> {
     }
 }
 
-fn amount_symbol_then_quantity(i: Input<u8>) -> U8Result<(String, Symbol)> {
+fn amount_symbol_then_quantity(i: Input<u8>) -> U8Result<Amount> {
     parse!{i;
         let symbol = symbol();
-        whitespace();
+        let has_ws = whitespace();
         let quantity = quantity();
-        ret (quantity, symbol)
+
+        ret Amount {
+            value: quantity,
+            symbol: symbol,
+            format: if has_ws { AmountFormat::SymbolLeftWithSpace }
+                    else { AmountFormat::SymbolLeftNoSpace }
+        }
     }
 }
 
-fn amount_quantity_then_symbol(i: Input<u8>) -> U8Result<(String, Symbol)> {
+fn amount_quantity_then_symbol(i: Input<u8>) -> U8Result<Amount> {
     parse!{i;
         let quantity = quantity();
-        whitespace();
+        let has_ws = whitespace();
         let symbol = symbol();
-        ret (quantity, symbol)
+
+        ret Amount {
+            value: quantity,
+            symbol: symbol,
+            format: if has_ws { AmountFormat::SymbolRightWithSpace }
+                    else { AmountFormat::SymbolRightNoSpace }
+        }
     }
 }
 
-fn amount(i: Input<u8>) -> U8Result<(String, Symbol)> {
+fn amount(i: Input<u8>) -> U8Result<Amount> {
     or(i, amount_symbol_then_quantity, amount_quantity_then_symbol)
 }
 
-fn price(i: Input<u8>) -> U8Result<(Date, Symbol, (String, Symbol))> {
+fn price(i: Input<u8>) -> U8Result<(Date, Symbol, Amount)> {
     parse!{i;
         token(b'P');
         mandatory_whitespace();
@@ -180,7 +213,7 @@ fn price(i: Input<u8>) -> U8Result<(Date, Symbol, (String, Symbol))> {
     }
 }
 
-fn price_line(i: Input<u8>) -> U8Result<(Date, Symbol, (String, Symbol))> {
+fn price_line(i: Input<u8>) -> U8Result<(Date, Symbol, Amount)> {
     parse!{i;
         let price = price();
         line_ending();
@@ -226,9 +259,41 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{Date, Symbol};
-    use super::{date, day, month, quoted_symbol, unquoted_symbol, symbol, year};
+    use super::{Amount, AmountFormat, Date, Symbol};
+    use super::{amount, amount_quantity_then_symbol,
+        amount_symbol_then_quantity, date, day, make_quantity, month, quantity,
+        quoted_symbol, unquoted_symbol, symbol, whitespace, year};
     use chomp::{parse_only};
+
+    #[test]
+    fn make_quantity_positive_value() {
+        let qty = make_quantity(b'+', b"5,241.51");
+        assert_eq!(qty, d128!(5241.51));
+    }
+
+    #[test]
+    fn make_quantity_negative_value() {
+        let qty = make_quantity(b'-', b"5,241.51");
+        assert_eq!(qty, d128!(-5241.51));
+    }
+
+    #[test]
+    fn whitespace_space() {
+        let result = parse_only(whitespace, b" ");
+        assert_eq!(result, Ok(true));
+    }
+
+    #[test]
+    fn whitespace_tab() {
+        let result = parse_only(whitespace, b"\t");
+        assert_eq!(result, Ok(true));
+    }
+
+    #[test]
+    fn whitespace_empty() {
+        let result = parse_only(whitespace, b"");
+        assert_eq!(result, Ok(false));
+    }
 
     #[test]
     fn year_valid() {
@@ -309,6 +374,109 @@ mod tests {
         assert_eq!(result, Ok(Symbol {
             value: "$",
             quoted: false
+        }));
+    }
+
+    #[test]
+    fn quantity_negative_no_fractional_part() {
+        let result = parse_only(quantity, b"-1110");
+        assert_eq!(result, Ok(d128!(-1110)));
+    }
+
+    #[test]
+    fn quantity_positive_no_fractional_part() {
+        let result = parse_only(quantity, b"2,314");
+        assert_eq!(result, Ok(d128!(2314)));
+    }
+
+    #[test]
+    fn quantity_negative_with_fractional_part() {
+        let result = parse_only(quantity, b"-1,110.38");
+        assert_eq!(result, Ok(d128!(-1110.38)));
+    }
+
+    #[test]
+    fn quantity_positive_with_fractional_part() {
+        let result = parse_only(quantity, b"2314.793");
+        assert_eq!(result, Ok(d128!(2314.793)));
+    }
+
+    #[test]
+    fn amount_symbol_then_quantity_no_whitespace() {
+        let result = parse_only(amount_symbol_then_quantity, b"$13,245.00");
+        assert_eq!(result, Ok(Amount {
+            value: d128!(13245.00),
+            symbol: Symbol {
+                value: "$",
+                quoted: false
+            },
+            format: AmountFormat::SymbolLeftNoSpace
+        }));
+    }
+
+    #[test]
+    fn amount_symbol_then_quantity_with_whitespace() {
+        let result = parse_only(amount_symbol_then_quantity, b"US$ -13,245.00");
+        assert_eq!(result, Ok(Amount {
+            value: d128!(-13245.00),
+            symbol: Symbol {
+                value: "US$",
+                quoted: false
+            },
+            format: AmountFormat::SymbolLeftWithSpace
+        }));
+    }
+
+    #[test]
+    fn amount_quantity_then_symbol_no_whitespace() {
+        let result = parse_only(amount_quantity_then_symbol, b"13,245.463RUST");
+        assert_eq!(result, Ok(Amount {
+            value: d128!(13245.463),
+            symbol: Symbol {
+                value: "RUST",
+                quoted: false
+            },
+            format: AmountFormat::SymbolRightNoSpace
+        }));
+    }
+
+    #[test]
+    fn amount_quantity_then_symbol_with_whitespace() {
+        let result = parse_only(amount_quantity_then_symbol,
+            b"13,245.463 \"MUTF2351\"");
+        assert_eq!(result, Ok(Amount {
+            value: d128!(13245.463),
+            symbol: Symbol {
+                value: "MUTF2351",
+                quoted: true
+            },
+            format: AmountFormat::SymbolRightWithSpace
+        }));
+    }    
+
+    #[test]
+    fn amount_with_symbol_then_quantity() {
+        let result = parse_only(amount, b"$13,245.46");
+        assert_eq!(result, Ok(Amount {
+            value: d128!(13245.46),
+            symbol: Symbol {
+                value: "$",
+                quoted: false
+            },
+            format: AmountFormat::SymbolLeftNoSpace
+        }));
+    }
+
+    #[test]
+    fn amount_with_quantity_then_symbol() {
+        let result = parse_only(amount, b"13,245.463 \"MUTF2351\"");
+        assert_eq!(result, Ok(Amount {
+            value: d128!(13245.463),
+            symbol: Symbol {
+                value: "MUTF2351",
+                quoted: true
+            },
+            format: AmountFormat::SymbolRightWithSpace
         }));
     }
 }

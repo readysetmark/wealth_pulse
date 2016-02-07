@@ -5,3 +5,4 @@ authors = ["Mark Williams <mark@readysetmark.com>"]
 
 [dependencies]
 chomp = "0.2.4"
+decimal = "0.3.1"
