@@ -1,0 +1,6 @@
+[package]
+name = "wealth_pulse"
+version = "0.1.0"
+authors = ["Mark Williams <mark@readysetmark.com>"]
+
+[dependencies]
