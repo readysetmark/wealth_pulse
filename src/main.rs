@@ -3,15 +3,25 @@ extern crate chomp;
 
 use std::fs::File;
 use std::str;
-use chomp::{Input, U8Result, parse_only};
+use chomp::{Input, U8Result};
 use chomp::{count, option, or, string, take_while, take_while1, token};
 use chomp::ascii::{digit};
 use chomp::buffer::{Source, Stream, StreamError};
+
+// TYPES
+
+#[derive(PartialEq, Debug)]
+struct Date {
+    year: i32,
+    month: i32,
+    day: i32
+}
 
 
 // HELPERS
 
 fn to_i32(slice: Vec<u8>) -> i32 {
+    // TODO: make "safe" -- ensure all u8's are actually "digits"
     slice.iter().fold(0, |acc, &d| (acc * 10) + ((d - ('0' as u8)) as i32))
 }
 
@@ -79,14 +89,20 @@ fn day(i: Input<u8>) -> U8Result<i32> {
     count(i, 2, |i| digit(i)).map(to_i32)
 }
 
-fn date(i: Input<u8>) -> U8Result<(i32, i32, i32)> {
+fn date(i: Input<u8>) -> U8Result<Date> {
+    // TODO: validate year when creating
     parse!{i;
         let year =  year();
                     token(b'-');
         let month = month();
                     token(b'-');
         let day =   day();
-        ret (year, month, day)
+
+        ret Date {
+            year: year,
+            month: month,
+            day: day
+        }
     }
 }
 
@@ -137,7 +153,7 @@ fn amount(i: Input<u8>) -> U8Result<(String, &str)> {
     or(i, amount_symbol_then_quantity, amount_quantity_then_symbol)
 }
 
-fn price(i: Input<u8>) -> U8Result<((i32, i32, i32), &str, (String, &str))> {
+fn price(i: Input<u8>) -> U8Result<(Date, &str, (String, &str))> {
     parse!{i;
         token(b'P');
         mandatory_whitespace();
@@ -150,7 +166,7 @@ fn price(i: Input<u8>) -> U8Result<((i32, i32, i32), &str, (String, &str))> {
     }
 }
 
-fn price_line(i: Input<u8>) -> U8Result<((i32, i32, i32), &str, (String, &str))> {
+fn price_line(i: Input<u8>) -> U8Result<(Date, &str, (String, &str))> {
     parse!{i;
         let price = price();
         line_ending();
@@ -164,7 +180,6 @@ fn price_line(i: Input<u8>) -> U8Result<((i32, i32, i32), &str, (String, &str))>
 
 fn main() {
     // println!("{:?}", parse_only(mandatory_whitespace, b" "));
-    // println!("{:?}", parse_only(date, b"2016-02-06"));
     // println!("{:?}", parse_only(symbol, b"\"AIM1651\""));
     // println!("{:?}", parse_only(symbol, b"$"));
     // println!("{:?}", parse_only(amount, b"$-5.82"));
@@ -192,4 +207,40 @@ fn main() {
     //     Ok(prices)  => println!("Parsed {} prices", prices.len()),
     //     Err(e)      => println!("Uhm, wat? {:?}", e)
     // }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::{Date};
+    use super::{date, day, month, year};
+    use chomp::{parse_only};
+
+    #[test]
+    fn year_valid() {
+        let result = parse_only(year, b"2016");
+        assert_eq!(result, Ok(2016));
+    }
+
+    #[test]
+    fn month_valid() {
+        let result = parse_only(month, b"02");
+        assert_eq!(result, Ok(2));
+    }
+
+    #[test]
+    fn day_valid() {
+        let result = parse_only(day, b"07");
+        assert_eq!(result, Ok(7));
+    }
+
+    #[test]
+    fn date_valid() {
+        let result = parse_only(date, b"2016-02-07");
+        assert_eq!(result, Ok(Date {
+            year: 2016,
+            month: 2,
+            day: 7
+        }));
+    }
 }
