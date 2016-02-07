@@ -2,15 +2,69 @@
 extern crate chomp;
 
 use std::fs::File;
-use std::io::Read;
 use std::str;
 use chomp::{Input, U8Result, parse_only};
-use chomp::{count, eof, option, or, sep_by, string, take_while, take_while1, token};
+use chomp::{count, option, or, string, take_while, take_while1, token};
 use chomp::ascii::{digit};
 use chomp::buffer::{Source, Stream, StreamError};
 
+
+// HELPERS
+
 fn to_i32(slice: Vec<u8>) -> i32 {
     slice.iter().fold(0, |acc, &d| (acc * 10) + ((d - ('0' as u8)) as i32))
+}
+
+fn make_quantity(sign: u8, number: &[u8]) -> String {
+    let mut qty = String::new();
+    if sign == b'-' {
+        qty.push_str(str::from_utf8(&[sign]).unwrap());
+    }
+    qty.push_str(str::from_utf8(number).unwrap());
+    qty.replace(",", "");
+    qty
+}
+
+fn is_whitespace_char(c: u8) -> bool {
+    c == b'\t' || c == b' '
+}
+
+fn is_quoted_symbol_char(c: u8) -> bool {
+    c != b'\"' && c != b'\r' && c != b'\n'
+}
+
+fn is_digit_char(c: u8) -> bool {
+    b'0' <= c && c <= b'9'
+}
+
+fn is_newline_char(c: u8) -> bool {
+    c == b'\r' && c == b'\n'
+}
+
+fn is_unquoted_symbol_char(c: u8) -> bool {
+    c != b'-' && c != b';' && c != b'\"' && !is_newline_char(c)
+     && !is_digit_char(c) && !is_whitespace_char(c)
+}
+
+fn is_quantity_char(c: u8) -> bool {
+    is_digit_char(c) || c == b'.' || c == b','
+}
+
+
+// PARSERS
+
+fn whitespace(i: Input<u8>) -> U8Result<bool> {
+    take_while(i, is_whitespace_char).map(|ws| ws.len() > 0)
+}
+
+fn mandatory_whitespace(i: Input<u8>) -> U8Result<()> {
+    take_while1(i, is_whitespace_char).map(|_| ())
+}
+
+fn line_ending(i: Input<u8>) -> U8Result<()> {
+    or(i,
+        |i| token(i, b'\n').map(|_| ()),
+        |i| string(i, b"\r\n").map(|_| ()))
 }
 
 fn year(i: Input<u8>) -> U8Result<i32> {
@@ -36,23 +90,6 @@ fn date(i: Input<u8>) -> U8Result<(i32, i32, i32)> {
     }
 }
 
-fn is_whitespace(c: u8) -> bool {
-    c == b'\t' || c == b' '
-}
-
-fn whitespace(i: Input<u8>) -> U8Result<bool> {
-    take_while(i, is_whitespace).map(|ws| ws.len() > 0)
-}
-
-fn mandatory_whitespace(i: Input<u8>) -> U8Result<()> {
-    take_while1(i, is_whitespace).map(|_| ())
-}
-
-
-fn is_quoted_symbol_char(c: u8) -> bool {
-    c != b'\"' && c != b'\r' && c != b'\n'
-}
-
 fn quoted_symbol(i: Input<u8>) -> U8Result<&str> {
     parse!{i;
         token(b'\"');
@@ -62,41 +99,12 @@ fn quoted_symbol(i: Input<u8>) -> U8Result<&str> {
     }
 }
 
-fn is_digit(c: u8) -> bool {
-    b'0' <= c && c <= b'9'
-}
-
-fn is_newline(c: u8) -> bool {
-    c == b'\r' && c == b'\n'
-}
-
-fn is_unquoted_symbol_char(c: u8) -> bool {
-    //"-0123456789; \"\t\r\n".as_bytes().iter().all(|b| b != c))
-    c != b'-' && c != b';' && c != b'\"' && !is_newline(c)
-     && !is_digit(c) && !is_whitespace(c)
-}
-
 fn unquoted_symbol(i: Input<u8>) -> U8Result<&str> {
     take_while1(i, is_unquoted_symbol_char).map(|b| str::from_utf8(b).unwrap())
 }
 
 fn symbol(i: Input<u8>) -> U8Result<&str> {
     or(i, quoted_symbol, unquoted_symbol)
-}
-
-
-fn is_quantity_char(c: u8) -> bool {
-    is_digit(c) || c == b'.' || c == b','
-}
-
-fn make_quantity(sign: u8, number: &[u8]) -> String {
-    let mut qty = String::new();
-    if sign == b'-' {
-        qty.push_str(str::from_utf8(&[sign]).unwrap());
-    }
-    qty.push_str(str::from_utf8(number).unwrap());
-    qty.replace(",", "");
-    qty
 }
 
 fn quantity(i: Input<u8>) -> U8Result<String> {
@@ -129,8 +137,6 @@ fn amount(i: Input<u8>) -> U8Result<(String, &str)> {
     or(i, amount_symbol_then_quantity, amount_quantity_then_symbol)
 }
 
-
-
 fn price(i: Input<u8>) -> U8Result<((i32, i32, i32), &str, (String, &str))> {
     parse!{i;
         token(b'P');
@@ -144,14 +150,6 @@ fn price(i: Input<u8>) -> U8Result<((i32, i32, i32), &str, (String, &str))> {
     }
 }
 
-
-fn line_ending(i: Input<u8>) -> U8Result<()> {
-    or(i,
-        |i| token(i, b'\n').map(|_| ()),
-        |i| string(i, b"\r\n").map(|_| ()))
-}
-
-
 fn price_line(i: Input<u8>) -> U8Result<((i32, i32, i32), &str, (String, &str))> {
     parse!{i;
         let price = price();
@@ -160,14 +158,9 @@ fn price_line(i: Input<u8>) -> U8Result<((i32, i32, i32), &str, (String, &str))>
     }
 }
 
-// fn price_db(i: Input<u8>) -> U8Result<Vec<((i32, i32, i32), &str, (String, &str))>> {
-//     parse!{i;
-//         let prices = sep_by(price, line_ending);
-//         eof();
-//         ret prices
-//     }
-// }
 
+
+// MAIN
 
 fn main() {
     // println!("{:?}", parse_only(mandatory_whitespace, b" "));
