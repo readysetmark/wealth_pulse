@@ -17,6 +17,12 @@ struct Date {
     day: i32
 }
 
+#[derive(PartialEq, Debug)]
+struct Symbol<'a> {
+    value: &'a str,
+    quoted: bool
+}
+
 
 // HELPERS
 
@@ -106,20 +112,28 @@ fn date(i: Input<u8>) -> U8Result<Date> {
     }
 }
 
-fn quoted_symbol(i: Input<u8>) -> U8Result<&str> {
+fn quoted_symbol(i: Input<u8>) -> U8Result<Symbol> {
     parse!{i;
         token(b'\"');
         let symbol = take_while1(is_quoted_symbol_char);
         token(b'\"');
-        ret str::from_utf8(symbol).unwrap()
+
+        ret Symbol {
+            value: str::from_utf8(symbol).unwrap(),
+            quoted: true
+        }
     }
 }
 
-fn unquoted_symbol(i: Input<u8>) -> U8Result<&str> {
-    take_while1(i, is_unquoted_symbol_char).map(|b| str::from_utf8(b).unwrap())
+fn unquoted_symbol(i: Input<u8>) -> U8Result<Symbol> {
+    take_while1(i, is_unquoted_symbol_char)
+        .map(|b| Symbol {
+            value: str::from_utf8(b).unwrap(),
+            quoted: false,
+        })
 }
 
-fn symbol(i: Input<u8>) -> U8Result<&str> {
+fn symbol(i: Input<u8>) -> U8Result<Symbol> {
     or(i, quoted_symbol, unquoted_symbol)
 }
 
@@ -131,7 +145,7 @@ fn quantity(i: Input<u8>) -> U8Result<String> {
     }
 }
 
-fn amount_symbol_then_quantity(i: Input<u8>) -> U8Result<(String, &str)> {
+fn amount_symbol_then_quantity(i: Input<u8>) -> U8Result<(String, Symbol)> {
     parse!{i;
         let symbol = symbol();
         whitespace();
@@ -140,7 +154,7 @@ fn amount_symbol_then_quantity(i: Input<u8>) -> U8Result<(String, &str)> {
     }
 }
 
-fn amount_quantity_then_symbol(i: Input<u8>) -> U8Result<(String, &str)> {
+fn amount_quantity_then_symbol(i: Input<u8>) -> U8Result<(String, Symbol)> {
     parse!{i;
         let quantity = quantity();
         whitespace();
@@ -149,11 +163,11 @@ fn amount_quantity_then_symbol(i: Input<u8>) -> U8Result<(String, &str)> {
     }
 }
 
-fn amount(i: Input<u8>) -> U8Result<(String, &str)> {
+fn amount(i: Input<u8>) -> U8Result<(String, Symbol)> {
     or(i, amount_symbol_then_quantity, amount_quantity_then_symbol)
 }
 
-fn price(i: Input<u8>) -> U8Result<(Date, &str, (String, &str))> {
+fn price(i: Input<u8>) -> U8Result<(Date, Symbol, (String, Symbol))> {
     parse!{i;
         token(b'P');
         mandatory_whitespace();
@@ -166,7 +180,7 @@ fn price(i: Input<u8>) -> U8Result<(Date, &str, (String, &str))> {
     }
 }
 
-fn price_line(i: Input<u8>) -> U8Result<(Date, &str, (String, &str))> {
+fn price_line(i: Input<u8>) -> U8Result<(Date, Symbol, (String, Symbol))> {
     parse!{i;
         let price = price();
         line_ending();
@@ -212,8 +226,8 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{Date};
-    use super::{date, day, month, year};
+    use super::{Date, Symbol};
+    use super::{date, day, month, quoted_symbol, unquoted_symbol, symbol, year};
     use chomp::{parse_only};
 
     #[test]
@@ -241,6 +255,60 @@ mod tests {
             year: 2016,
             month: 2,
             day: 7
+        }));
+    }
+
+    #[test]
+    fn quoted_symbol_valid() {
+        let result = parse_only(quoted_symbol, b"\"MUTF2351\"");
+        assert_eq!(result, Ok(Symbol {
+            value: "MUTF2351",
+            quoted: true
+        }));
+    }
+
+    #[test]
+    fn unquoted_symbol_just_symbol() {
+        let result = parse_only(unquoted_symbol, b"$");
+        assert_eq!(result, Ok(Symbol {
+            value: "$",
+            quoted: false
+        }));
+    }
+
+    #[test]
+    fn unquoted_symbol_symbol_and_letters() {
+        let result = parse_only(unquoted_symbol, b"US$");
+        assert_eq!(result, Ok(Symbol {
+            value: "US$",
+            quoted: false
+        }));
+    }
+
+    #[test]
+    fn unquoted_symbol_just_letters() {
+        let result = parse_only(unquoted_symbol, b"RUST");
+        assert_eq!(result, Ok(Symbol {
+            value: "RUST",
+            quoted: false
+        }));
+    }
+
+    #[test]
+    fn symbol_quoted() {
+        let result = parse_only(symbol, b"\"MUTF2351\"");
+        assert_eq!(result, Ok(Symbol {
+            value: "MUTF2351",
+            quoted: true
+        }));
+    }
+
+    #[test]
+    fn symbol_unquoted() {
+        let result = parse_only(symbol, b"$");
+        assert_eq!(result, Ok(Symbol {
+            value: "$",
+            quoted: false
         }));
     }
 }
