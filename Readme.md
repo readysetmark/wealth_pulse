@@ -29,8 +29,18 @@ Run tests via Cargo:
 Project Plan
 ------------
 
+Ledger
+* [ ] Parse ledger file
+
+PriceDB
 * [x] Parse pricedb file
 * [ ] Serialize pricedb file
+* [ ] Fetch new prices and store
+
+Reports
+* [ ] Balance report
+* [ ] Register report
+* [ ] Net worth report
 
 
 [ledger]: http://www.ledger-cli.org/
