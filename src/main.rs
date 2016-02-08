@@ -45,6 +45,7 @@ struct Amount<'a> {
 
 #[derive(PartialEq, Debug)]
 struct Price<'a> {
+    // TODO: add line field
     date: Date,
     symbol: Symbol<'a>,
     amount: Amount<'a>
