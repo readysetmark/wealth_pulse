@@ -238,14 +238,8 @@ fn price_line(i: Input<u8>) -> U8Result<Price> {
 // MAIN
 
 fn main() {
-    // println!("{:?}", parse_only(mandatory_whitespace, b" "));
-    // println!("{:?}", parse_only(symbol, b"\"AIM1651\""));
-    // println!("{:?}", parse_only(symbol, b"$"));
-    // println!("{:?}", parse_only(amount, b"$-5.82"));
-    // println!("{:?}", parse_only(price, b"P 2016-02-06 \"AIM1651\" $5.82"));
-    // println!("{:?}", parse_only(price_db, b"P 2016-02-06 \"AIM1651\" $5.82\r\nP 2016-02-07 \"AIM1651\" $5.85"));
-
-    let price_db_filepath = "/Users/mark/Nexus/Documents/finances/ledger/.pricedb";
+    let price_db_filepath =
+        "/Users/mark/Nexus/Documents/finances/ledger/.pricedb";
     let file = File::open(price_db_filepath).ok().expect("Failed to open file");
 
     let mut source = Source::new(file);
@@ -254,18 +248,13 @@ fn main() {
     loop {
         match source.parse(price_line) {
             Ok(_)                        => n += 1,
-            Err(StreamError::Retry)      => {}, // Needed to refill buffer when necessary
+            Err(StreamError::Retry)      => {}, // Needed to refill buffer
             Err(StreamError::EndOfInput) => break,
             Err(e)                       => { panic!("{:?}", e); }
         }
     }
 
     println!("Parsed {} prices", n);
-
-    // match source.parse(price_db) {
-    //     Ok(prices)  => println!("Parsed {} prices", prices.len()),
-    //     Err(e)      => println!("Uhm, wat? {:?}", e)
-    // }
 }
 
 
