@@ -43,6 +43,13 @@ struct Amount<'a> {
     format: AmountFormat
 }
 
+#[derive(PartialEq, Debug)]
+struct Price<'a> {
+    date: Date,
+    symbol: Symbol<'a>,
+    amount: Amount<'a>
+}
+
 
 
 // HELPERS
@@ -200,7 +207,7 @@ fn amount(i: Input<u8>) -> U8Result<Amount> {
     or(i, amount_symbol_then_quantity, amount_quantity_then_symbol)
 }
 
-fn price(i: Input<u8>) -> U8Result<(Date, Symbol, Amount)> {
+fn price(i: Input<u8>) -> U8Result<Price> {
     parse!{i;
         token(b'P');
         mandatory_whitespace();
@@ -209,11 +216,16 @@ fn price(i: Input<u8>) -> U8Result<(Date, Symbol, Amount)> {
         let symbol = symbol();
         mandatory_whitespace();
         let amount = amount();
-        ret (date, symbol, amount)
+
+        ret Price {
+            date: date,
+            symbol: symbol,
+            amount: amount
+        }
     }
 }
 
-fn price_line(i: Input<u8>) -> U8Result<(Date, Symbol, Amount)> {
+fn price_line(i: Input<u8>) -> U8Result<Price> {
     parse!{i;
         let price = price();
         line_ending();
@@ -259,10 +271,11 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{Amount, AmountFormat, Date, Symbol};
+    use super::{Amount, AmountFormat, Date, Price, Symbol};
     use super::{amount, amount_quantity_then_symbol,
-        amount_symbol_then_quantity, date, day, make_quantity, month, quantity,
-        quoted_symbol, unquoted_symbol, symbol, whitespace, year};
+        amount_symbol_then_quantity, date, day, make_quantity, month, price,
+        price_line, quantity, quoted_symbol, unquoted_symbol, symbol,
+        whitespace, year};
     use chomp::{parse_only};
 
     #[test]
@@ -477,6 +490,55 @@ mod tests {
                 quoted: true
             },
             format: AmountFormat::SymbolRightWithSpace
+        }));
+    }
+
+    #[test]
+    fn price_valid() {
+        let result = parse_only(price, b"P 2016-02-07 \"MUTF2351\" $5.42");
+        assert_eq!(result, Ok(Price {
+            date: Date {
+                year: 2016,
+                month: 2,
+                day: 7
+            },
+            symbol: Symbol {
+                value: "MUTF2351",
+                quoted: true
+            },
+            amount: Amount {
+                value: d128!(5.42),
+                symbol: Symbol {
+                    value: "$",
+                    quoted: false
+                },
+                format: AmountFormat::SymbolLeftNoSpace
+            }
+        }));
+    }
+
+    #[test]
+    fn price_line_valid() {
+        let result = parse_only(price_line,
+            b"P 2016-02-07 \"MUTF2351\" $5.42\r\n");
+        assert_eq!(result, Ok(Price {
+            date: Date {
+                year: 2016,
+                month: 2,
+                day: 7
+            },
+            symbol: Symbol {
+                value: "MUTF2351",
+                quoted: true
+            },
+            amount: Amount {
+                value: d128!(5.42),
+                symbol: Symbol {
+                    value: "$",
+                    quoted: false
+                },
+                format: AmountFormat::SymbolLeftNoSpace
+            }
         }));
     }
 }
