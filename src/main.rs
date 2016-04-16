@@ -16,11 +16,15 @@ use std::str;
 // TYPES
 
 #[derive(PartialEq, Debug)]
-enum AmountFormat {
-    SymbolLeftNoSpace,
-    SymbolLeftWithSpace,
-    SymbolRightNoSpace,
-    SymbolRightWithSpace
+enum SymbolPosition {
+    Left,
+    Right
+}
+
+#[derive(PartialEq, Debug)]
+struct AmountRenderOptions {
+    symbol_position: SymbolPosition,
+    with_space: bool
 }
 
 #[derive(PartialEq, Debug)]
@@ -40,7 +44,7 @@ struct Symbol<'a> {
 struct Amount<'a> {
     value: d128,
     symbol: Symbol<'a>,
-    format: AmountFormat
+    render_options: AmountRenderOptions
 }
 
 #[derive(PartialEq, Debug)]
@@ -183,8 +187,10 @@ fn amount_symbol_then_quantity(i: Input<u8>) -> U8Result<Amount> {
         ret Amount {
             value: quantity,
             symbol: symbol,
-            format: if has_ws { AmountFormat::SymbolLeftWithSpace }
-                    else { AmountFormat::SymbolLeftNoSpace }
+            render_options: AmountRenderOptions {
+                symbol_position: SymbolPosition::Left,
+                with_space: has_ws,
+            }
         }
     }
 }
@@ -198,8 +204,10 @@ fn amount_quantity_then_symbol(i: Input<u8>) -> U8Result<Amount> {
         ret Amount {
             value: quantity,
             symbol: symbol,
-            format: if has_ws { AmountFormat::SymbolRightWithSpace }
-                    else { AmountFormat::SymbolRightNoSpace }
+            render_options: AmountRenderOptions {
+                symbol_position: SymbolPosition::Right,
+                with_space: has_ws,
+            }
         }
     }
 }
@@ -248,7 +256,8 @@ fn main() {
 
     loop {
         match source.parse(price_line) {
-            Ok(_)                        => n += 1,
+            Ok(price)                    => { println!("{:?}", price);
+                                              n += 1 },
             Err(StreamError::Retry)      => {}, // Needed to refill buffer
             Err(StreamError::EndOfInput) => break,
             Err(e)                       => { panic!("{:?}", e); }
@@ -261,7 +270,8 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{Amount, AmountFormat, Date, Price, Symbol};
+    use super::{Amount, AmountRenderOptions, Date, Price, Symbol,
+        SymbolPosition};
     use super::{amount, amount_quantity_then_symbol,
         amount_symbol_then_quantity, date, day, make_quantity, month, price,
         price_line, quantity, quoted_symbol, unquoted_symbol, symbol,
@@ -413,7 +423,10 @@ mod tests {
                 value: "$",
                 quoted: false
             },
-            format: AmountFormat::SymbolLeftNoSpace
+            render_options: AmountRenderOptions {
+                symbol_position: SymbolPosition::Left,
+                with_space: false
+            }
         }));
     }
 
@@ -426,7 +439,10 @@ mod tests {
                 value: "US$",
                 quoted: false
             },
-            format: AmountFormat::SymbolLeftWithSpace
+            render_options: AmountRenderOptions {
+                symbol_position: SymbolPosition::Left,
+                with_space: true
+            }
         }));
     }
 
@@ -439,7 +455,10 @@ mod tests {
                 value: "RUST",
                 quoted: false
             },
-            format: AmountFormat::SymbolRightNoSpace
+            render_options: AmountRenderOptions {
+                symbol_position: SymbolPosition::Right,
+                with_space: false
+            }
         }));
     }
 
@@ -453,7 +472,10 @@ mod tests {
                 value: "MUTF2351",
                 quoted: true
             },
-            format: AmountFormat::SymbolRightWithSpace
+            render_options: AmountRenderOptions {
+                symbol_position: SymbolPosition::Right,
+                with_space: true
+            }
         }));
     }    
 
@@ -466,7 +488,10 @@ mod tests {
                 value: "$",
                 quoted: false
             },
-            format: AmountFormat::SymbolLeftNoSpace
+            render_options: AmountRenderOptions {
+                symbol_position: SymbolPosition::Left,
+                with_space: false
+            }
         }));
     }
 
@@ -479,7 +504,10 @@ mod tests {
                 value: "MUTF2351",
                 quoted: true
             },
-            format: AmountFormat::SymbolRightWithSpace
+            render_options: AmountRenderOptions {
+                symbol_position: SymbolPosition::Right,
+                with_space: true
+            }
         }));
     }
 
@@ -502,7 +530,10 @@ mod tests {
                     value: "$",
                     quoted: false
                 },
-                format: AmountFormat::SymbolLeftNoSpace
+                render_options: AmountRenderOptions {
+                    symbol_position: SymbolPosition::Left,
+                    with_space: false
+                }
             }
         }));
     }
@@ -527,7 +558,10 @@ mod tests {
                     value: "$",
                     quoted: false
                 },
-                format: AmountFormat::SymbolLeftNoSpace
+                render_options: AmountRenderOptions {
+                    symbol_position: SymbolPosition::Left,
+                    with_space: false
+                }
             }
         }));
     }
