@@ -107,6 +107,16 @@ struct Price<'a> {
     amount: Amount<'a>
 }
 
+impl<'a> Price<'a> {
+    fn new(date: Date, symbol: Symbol<'a>, amount: Amount<'a>) -> Price<'a> {
+        Price {
+            date: date,
+            symbol: symbol,
+            amount: amount
+        }
+    }
+}
+
 
 
 // HELPERS
@@ -259,11 +269,7 @@ fn price(i: Input<u8>) -> U8Result<Price> {
         mandatory_whitespace();
         let amount = amount();
 
-        ret Price {
-            date: date,
-            symbol: symbol,
-            amount: amount
-        }
+        ret Price::new(date, symbol, amount)
     }
 }
 
@@ -489,29 +495,29 @@ mod tests {
     #[test]
     fn price_valid() {
         let result = parse_only(price, b"P 2016-02-07 \"MUTF2351\" $5.42");
-        assert_eq!(result, Ok(Price {
-            date: Date::new(2016, 2, 7),
-            symbol: Symbol::new("MUTF2351", SymbolRender::Quoted),
-            amount: Amount::new(
+        assert_eq!(result, Ok(Price::new(
+            Date::new(2016, 2, 7),
+            Symbol::new("MUTF2351", SymbolRender::Quoted),
+            Amount::new(
                 d128!(5.42),
                 Symbol::new("$", SymbolRender::Unquoted),
                 AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)
             )
-        }));
+        )));
     }
 
     #[test]
     fn price_line_valid() {
         let result = parse_only(price_line,
             b"P 2016-02-07 \"MUTF2351\" $5.42\r\n");
-        assert_eq!(result, Ok(Price {
-            date: Date::new(2016, 2, 7),
-            symbol: Symbol::new("MUTF2351", SymbolRender::Quoted),
-            amount: Amount::new(
+        assert_eq!(result, Ok(Price::new(
+            Date::new(2016, 2, 7),
+            Symbol::new("MUTF2351", SymbolRender::Quoted),
+            Amount::new(
                 d128!(5.42),
                 Symbol::new("$", SymbolRender::Unquoted),
                 AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)
             )
-        }));
+        )));
     }
 }
