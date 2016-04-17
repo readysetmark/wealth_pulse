@@ -22,6 +22,17 @@ struct Date {
     day: i32
 }
 
+impl Date {
+    fn new(year: i32, month: i32, day: i32) -> Date {
+        // TODO: validate date
+        Date {
+            year: year,
+            month: month,
+            day: day
+        }
+    }
+}
+
 #[derive(PartialEq, Debug)]
 struct Symbol<'a> {
     value: &'a str,
@@ -129,7 +140,6 @@ fn day(i: Input<u8>) -> U8Result<i32> {
 }
 
 fn date(i: Input<u8>) -> U8Result<Date> {
-    // TODO: validate year when creating
     parse!{i;
         let year =  year();
                     token(b'-');
@@ -137,11 +147,7 @@ fn date(i: Input<u8>) -> U8Result<Date> {
                     token(b'-');
         let day =   day();
 
-        ret Date {
-            year: year,
-            month: month,
-            day: day
-        }
+        ret Date::new(year, month, day)
     }
 }
 
