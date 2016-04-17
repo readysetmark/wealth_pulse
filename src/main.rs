@@ -16,18 +16,6 @@ use std::str;
 // TYPES
 
 #[derive(PartialEq, Debug)]
-enum SymbolPosition {
-    Left,
-    Right
-}
-
-#[derive(PartialEq, Debug)]
-struct AmountRenderOptions {
-    symbol_position: SymbolPosition,
-    with_space: bool
-}
-
-#[derive(PartialEq, Debug)]
 struct Date {
     year: i32,
     month: i32,
@@ -38,6 +26,18 @@ struct Date {
 struct Symbol<'a> {
     value: &'a str,
     quoted: bool
+}
+
+#[derive(PartialEq, Debug)]
+enum SymbolPosition {
+    Left,
+    Right
+}
+
+#[derive(PartialEq, Debug)]
+struct AmountRenderOptions {
+    symbol_position: SymbolPosition,
+    with_space: bool
 }
 
 #[derive(PartialEq, Debug)]
