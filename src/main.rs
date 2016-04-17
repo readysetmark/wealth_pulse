@@ -61,16 +61,42 @@ enum SymbolPosition {
 }
 
 #[derive(PartialEq, Debug)]
+enum Spacing {
+    Space,
+    NoSpace
+}
+
+#[derive(PartialEq, Debug)]
 struct AmountRenderOptions {
     symbol_position: SymbolPosition,
-    with_space: bool
+    spacing: Spacing
+}
+
+impl AmountRenderOptions {
+    fn new(position: SymbolPosition, spacing: Spacing) -> AmountRenderOptions {
+        AmountRenderOptions {
+            symbol_position: position,
+            spacing: spacing
+        }
+    }
 }
 
 #[derive(PartialEq, Debug)]
 struct Amount<'a> {
-    value: d128,
+    quantity: d128,
     symbol: Symbol<'a>,
     render_options: AmountRenderOptions
+}
+
+impl<'a> Amount<'a> {
+    fn new(quantity: d128, symbol: Symbol<'a>, render_opts: AmountRenderOptions)
+    -> Amount {
+        Amount {
+            quantity: quantity,
+            symbol: symbol,
+            render_options: render_opts
+        }
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -128,8 +154,11 @@ fn is_quantity_char(c: u8) -> bool {
 
 // PARSERS
 
-fn whitespace(i: Input<u8>) -> U8Result<bool> {
-    take_while(i, is_whitespace_char).map(|ws| ws.len() > 0)
+fn whitespace(i: Input<u8>) -> U8Result<Spacing> {
+    take_while(i, is_whitespace_char)
+        .map(|ws|
+            if ws.len() > 0 { Spacing::Space }
+            else { Spacing::NoSpace })
 }
 
 fn mandatory_whitespace(i: Input<u8>) -> U8Result<()> {
@@ -197,34 +226,22 @@ fn quantity(i: Input<u8>) -> U8Result<d128> {
 fn amount_symbol_then_quantity(i: Input<u8>) -> U8Result<Amount> {
     parse!{i;
         let symbol = symbol();
-        let has_ws = whitespace();
+        let spacing = whitespace();
         let quantity = quantity();
 
-        ret Amount {
-            value: quantity,
-            symbol: symbol,
-            render_options: AmountRenderOptions {
-                symbol_position: SymbolPosition::Left,
-                with_space: has_ws,
-            }
-        }
+        ret Amount::new(quantity, symbol,
+            AmountRenderOptions::new(SymbolPosition::Left, spacing))
     }
 }
 
 fn amount_quantity_then_symbol(i: Input<u8>) -> U8Result<Amount> {
     parse!{i;
         let quantity = quantity();
-        let has_ws = whitespace();
+        let spacing = whitespace();
         let symbol = symbol();
 
-        ret Amount {
-            value: quantity,
-            symbol: symbol,
-            render_options: AmountRenderOptions {
-                symbol_position: SymbolPosition::Right,
-                with_space: has_ws,
-            }
-        }
+        ret Amount::new(quantity, symbol,
+            AmountRenderOptions::new(SymbolPosition::Right, spacing))
     }
 }
 
@@ -286,7 +303,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{Amount, AmountRenderOptions, Date, Price, Symbol,
+    use super::{Amount, AmountRenderOptions, Date, Price, Spacing, Symbol,
         SymbolPosition, SymbolRender};
     use super::{amount, amount_quantity_then_symbol,
         amount_symbol_then_quantity, date, day, make_quantity, month, price,
@@ -309,19 +326,19 @@ mod tests {
     #[test]
     fn whitespace_space() {
         let result = parse_only(whitespace, b" ");
-        assert_eq!(result, Ok(true));
+        assert_eq!(result, Ok(Spacing::Space));
     }
 
     #[test]
     fn whitespace_tab() {
         let result = parse_only(whitespace, b"\t");
-        assert_eq!(result, Ok(true));
+        assert_eq!(result, Ok(Spacing::Space));
     }
 
     #[test]
     fn whitespace_empty() {
         let result = parse_only(whitespace, b"");
-        assert_eq!(result, Ok(false));
+        assert_eq!(result, Ok(Spacing::NoSpace));
     }
 
     #[test]
@@ -345,11 +362,7 @@ mod tests {
     #[test]
     fn date_valid() {
         let result = parse_only(date, b"2016-02-07");
-        assert_eq!(result, Ok(Date {
-            year: 2016,
-            month: 2,
-            day: 7
-        }));
+        assert_eq!(result, Ok(Date::new(2016, 2, 7)));
     }
 
     #[test]
@@ -415,100 +428,75 @@ mod tests {
     #[test]
     fn amount_symbol_then_quantity_no_whitespace() {
         let result = parse_only(amount_symbol_then_quantity, b"$13,245.00");
-        assert_eq!(result, Ok(Amount {
-            value: d128!(13245.00),
-            symbol: Symbol::new("$", SymbolRender::Unquoted),
-            render_options: AmountRenderOptions {
-                symbol_position: SymbolPosition::Left,
-                with_space: false
-            }
-        }));
+        assert_eq!(result, Ok(Amount::new(
+            d128!(13245.00),
+            Symbol::new("$", SymbolRender::Unquoted),
+            AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)
+        )));
     }
 
     #[test]
     fn amount_symbol_then_quantity_with_whitespace() {
         let result = parse_only(amount_symbol_then_quantity, b"US$ -13,245.00");
-        assert_eq!(result, Ok(Amount {
-            value: d128!(-13245.00),
-            symbol: Symbol::new("US$", SymbolRender::Unquoted),
-            render_options: AmountRenderOptions {
-                symbol_position: SymbolPosition::Left,
-                with_space: true
-            }
-        }));
+        assert_eq!(result, Ok(Amount::new(
+            d128!(-13245.00),
+            Symbol::new("US$", SymbolRender::Unquoted),
+            AmountRenderOptions::new(SymbolPosition::Left, Spacing::Space)
+        )));
     }
 
     #[test]
     fn amount_quantity_then_symbol_no_whitespace() {
         let result = parse_only(amount_quantity_then_symbol, b"13,245.463RUST");
-        assert_eq!(result, Ok(Amount {
-            value: d128!(13245.463),
-            symbol: Symbol::new("RUST", SymbolRender::Unquoted),
-            render_options: AmountRenderOptions {
-                symbol_position: SymbolPosition::Right,
-                with_space: false
-            }
-        }));
+        assert_eq!(result, Ok(Amount::new(
+            d128!(13245.463),
+            Symbol::new("RUST", SymbolRender::Unquoted),
+            AmountRenderOptions::new(SymbolPosition::Right, Spacing::NoSpace)
+        )));
     }
 
     #[test]
     fn amount_quantity_then_symbol_with_whitespace() {
         let result = parse_only(amount_quantity_then_symbol,
             b"13,245.463 \"MUTF2351\"");
-        assert_eq!(result, Ok(Amount {
-            value: d128!(13245.463),
-            symbol: Symbol::new("MUTF2351", SymbolRender::Quoted),
-            render_options: AmountRenderOptions {
-                symbol_position: SymbolPosition::Right,
-                with_space: true
-            }
-        }));
+        assert_eq!(result, Ok(Amount::new(
+            d128!(13245.463),
+            Symbol::new("MUTF2351", SymbolRender::Quoted),
+            AmountRenderOptions::new(SymbolPosition::Right, Spacing::Space)
+        )));
     }    
 
     #[test]
     fn amount_with_symbol_then_quantity() {
         let result = parse_only(amount, b"$13,245.46");
-        assert_eq!(result, Ok(Amount {
-            value: d128!(13245.46),
-            symbol: Symbol::new("$", SymbolRender::Unquoted),
-            render_options: AmountRenderOptions {
-                symbol_position: SymbolPosition::Left,
-                with_space: false
-            }
-        }));
+        assert_eq!(result, Ok(Amount::new(
+            d128!(13245.46),
+            Symbol::new("$", SymbolRender::Unquoted),
+            AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)
+        )));
     }
 
     #[test]
     fn amount_with_quantity_then_symbol() {
         let result = parse_only(amount, b"13,245.463 \"MUTF2351\"");
-        assert_eq!(result, Ok(Amount {
-            value: d128!(13245.463),
-            symbol: Symbol::new("MUTF2351", SymbolRender::Quoted),
-            render_options: AmountRenderOptions {
-                symbol_position: SymbolPosition::Right,
-                with_space: true
-            }
-        }));
+        assert_eq!(result, Ok(Amount::new(
+            d128!(13245.463),
+            Symbol::new("MUTF2351", SymbolRender::Quoted),
+            AmountRenderOptions::new(SymbolPosition::Right, Spacing::Space)
+        )));
     }
 
     #[test]
     fn price_valid() {
         let result = parse_only(price, b"P 2016-02-07 \"MUTF2351\" $5.42");
         assert_eq!(result, Ok(Price {
-            date: Date {
-                year: 2016,
-                month: 2,
-                day: 7
-            },
+            date: Date::new(2016, 2, 7),
             symbol: Symbol::new("MUTF2351", SymbolRender::Quoted),
-            amount: Amount {
-                value: d128!(5.42),
-                symbol: Symbol::new("$", SymbolRender::Unquoted),
-                render_options: AmountRenderOptions {
-                    symbol_position: SymbolPosition::Left,
-                    with_space: false
-                }
-            }
+            amount: Amount::new(
+                d128!(5.42),
+                Symbol::new("$", SymbolRender::Unquoted),
+                AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)
+            )
         }));
     }
 
@@ -517,20 +505,13 @@ mod tests {
         let result = parse_only(price_line,
             b"P 2016-02-07 \"MUTF2351\" $5.42\r\n");
         assert_eq!(result, Ok(Price {
-            date: Date {
-                year: 2016,
-                month: 2,
-                day: 7
-            },
+            date: Date::new(2016, 2, 7),
             symbol: Symbol::new("MUTF2351", SymbolRender::Quoted),
-            amount: Amount {
-                value: d128!(5.42),
-                symbol: Symbol::new("$", SymbolRender::Unquoted),
-                render_options: AmountRenderOptions {
-                    symbol_position: SymbolPosition::Left,
-                    with_space: false
-                }
-            }
+            amount: Amount::new(
+                d128!(5.42),
+                Symbol::new("$", SymbolRender::Unquoted),
+                AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)
+            )
         }));
     }
 }
