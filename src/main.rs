@@ -34,9 +34,24 @@ impl Date {
 }
 
 #[derive(PartialEq, Debug)]
+enum SymbolRender {
+    Quoted,
+    Unquoted
+}
+
+#[derive(PartialEq, Debug)]
 struct Symbol<'a> {
     value: &'a str,
-    quoted: bool
+    render: SymbolRender
+}
+
+impl<'a> Symbol<'a> {
+    fn new(symbol: &'a str, render: SymbolRender) -> Symbol {
+        Symbol {
+            value: symbol,
+            render: render
+        }
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -157,19 +172,14 @@ fn quoted_symbol(i: Input<u8>) -> U8Result<Symbol> {
         let symbol = take_while1(is_quoted_symbol_char);
         token(b'\"');
 
-        ret Symbol {
-            value: str::from_utf8(symbol).unwrap(),
-            quoted: true
-        }
+        ret Symbol::new(str::from_utf8(symbol).unwrap(), SymbolRender::Quoted)
     }
 }
 
 fn unquoted_symbol(i: Input<u8>) -> U8Result<Symbol> {
     take_while1(i, is_unquoted_symbol_char)
-        .map(|b| Symbol {
-            value: str::from_utf8(b).unwrap(),
-            quoted: false,
-        })
+        .map(|b|
+            Symbol::new(str::from_utf8(b).unwrap(), SymbolRender::Unquoted))
 }
 
 fn symbol(i: Input<u8>) -> U8Result<Symbol> {
@@ -277,7 +287,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::{Amount, AmountRenderOptions, Date, Price, Symbol,
-        SymbolPosition};
+        SymbolPosition, SymbolRender};
     use super::{amount, amount_quantity_then_symbol,
         amount_symbol_then_quantity, date, day, make_quantity, month, price,
         price_line, quantity, quoted_symbol, unquoted_symbol, symbol,
@@ -345,55 +355,37 @@ mod tests {
     #[test]
     fn quoted_symbol_valid() {
         let result = parse_only(quoted_symbol, b"\"MUTF2351\"");
-        assert_eq!(result, Ok(Symbol {
-            value: "MUTF2351",
-            quoted: true
-        }));
+        assert_eq!(result, Ok(Symbol::new("MUTF2351", SymbolRender::Quoted)));
     }
 
     #[test]
     fn unquoted_symbol_just_symbol() {
         let result = parse_only(unquoted_symbol, b"$");
-        assert_eq!(result, Ok(Symbol {
-            value: "$",
-            quoted: false
-        }));
+        assert_eq!(result, Ok(Symbol::new("$", SymbolRender::Unquoted)));
     }
 
     #[test]
     fn unquoted_symbol_symbol_and_letters() {
         let result = parse_only(unquoted_symbol, b"US$");
-        assert_eq!(result, Ok(Symbol {
-            value: "US$",
-            quoted: false
-        }));
+        assert_eq!(result, Ok(Symbol::new("US$", SymbolRender::Unquoted)));
     }
 
     #[test]
     fn unquoted_symbol_just_letters() {
         let result = parse_only(unquoted_symbol, b"RUST");
-        assert_eq!(result, Ok(Symbol {
-            value: "RUST",
-            quoted: false
-        }));
+        assert_eq!(result, Ok(Symbol::new("RUST", SymbolRender::Unquoted)));
     }
 
     #[test]
     fn symbol_quoted() {
         let result = parse_only(symbol, b"\"MUTF2351\"");
-        assert_eq!(result, Ok(Symbol {
-            value: "MUTF2351",
-            quoted: true
-        }));
+        assert_eq!(result, Ok(Symbol::new("MUTF2351", SymbolRender::Quoted)));
     }
 
     #[test]
     fn symbol_unquoted() {
         let result = parse_only(symbol, b"$");
-        assert_eq!(result, Ok(Symbol {
-            value: "$",
-            quoted: false
-        }));
+        assert_eq!(result, Ok(Symbol::new("$", SymbolRender::Unquoted)));
     }
 
     #[test]
@@ -425,10 +417,7 @@ mod tests {
         let result = parse_only(amount_symbol_then_quantity, b"$13,245.00");
         assert_eq!(result, Ok(Amount {
             value: d128!(13245.00),
-            symbol: Symbol {
-                value: "$",
-                quoted: false
-            },
+            symbol: Symbol::new("$", SymbolRender::Unquoted),
             render_options: AmountRenderOptions {
                 symbol_position: SymbolPosition::Left,
                 with_space: false
@@ -441,10 +430,7 @@ mod tests {
         let result = parse_only(amount_symbol_then_quantity, b"US$ -13,245.00");
         assert_eq!(result, Ok(Amount {
             value: d128!(-13245.00),
-            symbol: Symbol {
-                value: "US$",
-                quoted: false
-            },
+            symbol: Symbol::new("US$", SymbolRender::Unquoted),
             render_options: AmountRenderOptions {
                 symbol_position: SymbolPosition::Left,
                 with_space: true
@@ -457,10 +443,7 @@ mod tests {
         let result = parse_only(amount_quantity_then_symbol, b"13,245.463RUST");
         assert_eq!(result, Ok(Amount {
             value: d128!(13245.463),
-            symbol: Symbol {
-                value: "RUST",
-                quoted: false
-            },
+            symbol: Symbol::new("RUST", SymbolRender::Unquoted),
             render_options: AmountRenderOptions {
                 symbol_position: SymbolPosition::Right,
                 with_space: false
@@ -474,10 +457,7 @@ mod tests {
             b"13,245.463 \"MUTF2351\"");
         assert_eq!(result, Ok(Amount {
             value: d128!(13245.463),
-            symbol: Symbol {
-                value: "MUTF2351",
-                quoted: true
-            },
+            symbol: Symbol::new("MUTF2351", SymbolRender::Quoted),
             render_options: AmountRenderOptions {
                 symbol_position: SymbolPosition::Right,
                 with_space: true
@@ -490,10 +470,7 @@ mod tests {
         let result = parse_only(amount, b"$13,245.46");
         assert_eq!(result, Ok(Amount {
             value: d128!(13245.46),
-            symbol: Symbol {
-                value: "$",
-                quoted: false
-            },
+            symbol: Symbol::new("$", SymbolRender::Unquoted),
             render_options: AmountRenderOptions {
                 symbol_position: SymbolPosition::Left,
                 with_space: false
@@ -506,10 +483,7 @@ mod tests {
         let result = parse_only(amount, b"13,245.463 \"MUTF2351\"");
         assert_eq!(result, Ok(Amount {
             value: d128!(13245.463),
-            symbol: Symbol {
-                value: "MUTF2351",
-                quoted: true
-            },
+            symbol: Symbol::new("MUTF2351", SymbolRender::Quoted),
             render_options: AmountRenderOptions {
                 symbol_position: SymbolPosition::Right,
                 with_space: true
@@ -526,16 +500,10 @@ mod tests {
                 month: 2,
                 day: 7
             },
-            symbol: Symbol {
-                value: "MUTF2351",
-                quoted: true
-            },
+            symbol: Symbol::new("MUTF2351", SymbolRender::Quoted),
             amount: Amount {
                 value: d128!(5.42),
-                symbol: Symbol {
-                    value: "$",
-                    quoted: false
-                },
+                symbol: Symbol::new("$", SymbolRender::Unquoted),
                 render_options: AmountRenderOptions {
                     symbol_position: SymbolPosition::Left,
                     with_space: false
@@ -554,16 +522,10 @@ mod tests {
                 month: 2,
                 day: 7
             },
-            symbol: Symbol {
-                value: "MUTF2351",
-                quoted: true
-            },
+            symbol: Symbol::new("MUTF2351", SymbolRender::Quoted),
             amount: Amount {
                 value: d128!(5.42),
-                symbol: Symbol {
-                    value: "$",
-                    quoted: false
-                },
+                symbol: Symbol::new("$", SymbolRender::Unquoted),
                 render_options: AmountRenderOptions {
                     symbol_position: SymbolPosition::Left,
                     with_space: false
