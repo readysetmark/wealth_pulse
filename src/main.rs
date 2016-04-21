@@ -95,6 +95,24 @@ impl<'a> Amount<'a> {
     }
 }
 
+impl<'a> fmt::Display for Amount<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let spacing =
+            match self.render_options.spacing {
+                Spacing::Space   => " ",
+                Spacing::NoSpace => "",
+            };
+
+        match self.render_options.symbol_position {
+            SymbolPosition::Left  =>
+                write!(f, "{}{}{}", self.symbol, spacing, self.quantity),
+
+            SymbolPosition::Right =>
+                write!(f, "{}{}{}", self.quantity, spacing, self.symbol),
+        }
+    }
+}
+
 #[derive(PartialEq, Debug)]
 struct Price<'a> {
     // TODO: add line field
@@ -337,6 +355,54 @@ mod tests {
         let result =
             format!("{}", Symbol::new("$", SymbolRender::Unquoted));
         assert_eq!(result, "$");
+    }
+
+    #[test]
+    fn amount_fmt_symbol_left_with_space() {
+        let result =
+            format!("{}", Amount::new(
+                d128!(13245.00),
+                Symbol::new("US$", SymbolRender::Unquoted),
+                AmountRenderOptions::new(
+                    SymbolPosition::Left,
+                    Spacing::Space)));
+        assert_eq!(result, "US$ 13245.00");
+    }
+
+    #[test]
+    fn amount_fmt_symbol_left_no_space() {
+        let result =
+            format!("{}", Amount::new(
+                d128!(13245.00),
+                Symbol::new("$", SymbolRender::Unquoted),
+                AmountRenderOptions::new(
+                    SymbolPosition::Left,
+                    Spacing::NoSpace)));
+        assert_eq!(result, "$13245.00");   
+    }
+
+    #[test]
+    fn amount_fmt_symbol_right_with_space() {
+        let result =
+            format!("{}", Amount::new(
+                d128!(13245.463),
+                Symbol::new("MUTF2351", SymbolRender::Quoted),
+                AmountRenderOptions::new(
+                    SymbolPosition::Right,
+                    Spacing::Space)));
+        assert_eq!(result, "13245.463 \"MUTF2351\""); 
+    }
+
+    #[test]
+    fn amount_fmt_symbol_right_no_space() {
+        let result =
+            format!("{}", Amount::new(
+                d128!(13245.463),
+                Symbol::new("RUST", SymbolRender::Unquoted),
+                AmountRenderOptions::new(
+                    SymbolPosition::Right,
+                    Spacing::NoSpace)));
+        assert_eq!(result, "13245.463RUST");    
     }
 
     // HELPERS
