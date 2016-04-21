@@ -1,6 +1,7 @@
 extern crate core;
 #[macro_use]
 extern crate chomp;
+extern crate chrono;
 #[macro_use]
 extern crate decimal;
 
@@ -9,29 +10,14 @@ use chomp::{Input, U8Result};
 use chomp::{count, option, or, string, take_while, take_while1, token};
 use chomp::ascii::{digit};
 use chomp::buffer::{Source, Stream, StreamError};
+use chrono::date::Date;
+use chrono::offset::local::Local;
+use chrono::offset::TimeZone;
 use decimal::d128;
 use std::fs::File;
 use std::str;
 
 // TYPES
-
-#[derive(PartialEq, Debug)]
-struct Date {
-    year: i32,
-    month: i32,
-    day: i32
-}
-
-impl Date {
-    fn new(year: i32, month: i32, day: i32) -> Date {
-        // TODO: validate date
-        Date {
-            year: year,
-            month: month,
-            day: day
-        }
-    }
-}
 
 #[derive(PartialEq, Debug)]
 enum SymbolRender {
@@ -102,13 +88,14 @@ impl<'a> Amount<'a> {
 #[derive(PartialEq, Debug)]
 struct Price<'a> {
     // TODO: add line field
-    date: Date,
+    date: Date<Local>,
     symbol: Symbol<'a>,
     amount: Amount<'a>
 }
 
 impl<'a> Price<'a> {
-    fn new(date: Date, symbol: Symbol<'a>, amount: Amount<'a>) -> Price<'a> {
+    fn new(date: Date<Local>, symbol: Symbol<'a>, amount: Amount<'a>)
+    -> Price<'a> {
         Price {
             date: date,
             symbol: symbol,
@@ -123,7 +110,14 @@ impl<'a> Price<'a> {
 
 fn to_i32(slice: Vec<u8>) -> i32 {
     // TODO: make "safe" -- ensure all u8's are actually "digits"
-    slice.iter().fold(0, |acc, &d| (acc * 10) + ((d - ('0' as u8)) as i32))
+    slice.iter().fold(0,
+        |acc, &d| (acc * 10) + ((d - ('0' as u8)) as i32))
+}
+
+fn to_u32(slice: Vec<u8>) -> u32 {
+    // TODO: make "safe" -- ensure all u8's are actually "digits"
+    slice.iter().fold(0u32,
+        |acc, &d| (acc * 10u32) + ((d - ('0' as u8)) as u32))
 }
 
 fn make_quantity(sign: u8, number: &[u8]) -> d128 {
@@ -185,15 +179,15 @@ fn year(i: Input<u8>) -> U8Result<i32> {
     count(i, 4, |i| digit(i)).map(to_i32)
 }
 
-fn month(i: Input<u8>) -> U8Result<i32> {
-    count(i, 2, |i| digit(i)).map(to_i32)
+fn month(i: Input<u8>) -> U8Result<u32> {
+    count(i, 2, |i| digit(i)).map(to_u32)
 }
 
-fn day(i: Input<u8>) -> U8Result<i32> {
-    count(i, 2, |i| digit(i)).map(to_i32)
+fn day(i: Input<u8>) -> U8Result<u32> {
+    count(i, 2, |i| digit(i)).map(to_u32)
 }
 
-fn date(i: Input<u8>) -> U8Result<Date> {
+fn date(i: Input<u8>) -> U8Result<Date<Local>> {
     parse!{i;
         let year =  year();
                     token(b'-');
@@ -201,7 +195,7 @@ fn date(i: Input<u8>) -> U8Result<Date> {
                     token(b'-');
         let day =   day();
 
-        ret Date::new(year, month, day)
+        ret Local.ymd(year, month, day)
     }
 }
 
@@ -309,13 +303,15 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{Amount, AmountRenderOptions, Date, Price, Spacing, Symbol,
+    use super::{Amount, AmountRenderOptions, Price, Spacing, Symbol,
         SymbolPosition, SymbolRender};
     use super::{amount, amount_quantity_then_symbol,
         amount_symbol_then_quantity, date, day, make_quantity, month, price,
         price_line, quantity, quoted_symbol, unquoted_symbol, symbol,
         whitespace, year};
     use chomp::{parse_only};
+    use chrono::offset::local::Local;
+    use chrono::offset::TimeZone;
 
     #[test]
     fn make_quantity_positive_value() {
@@ -368,7 +364,7 @@ mod tests {
     #[test]
     fn date_valid() {
         let result = parse_only(date, b"2016-02-07");
-        assert_eq!(result, Ok(Date::new(2016, 2, 7)));
+        assert_eq!(result, Ok(Local.ymd(2016, 2, 7)));
     }
 
     #[test]
@@ -496,7 +492,7 @@ mod tests {
     fn price_valid() {
         let result = parse_only(price, b"P 2016-02-07 \"MUTF2351\" $5.42");
         assert_eq!(result, Ok(Price::new(
-            Date::new(2016, 2, 7),
+            Local.ymd(2016, 2, 7),
             Symbol::new("MUTF2351", SymbolRender::Quoted),
             Amount::new(
                 d128!(5.42),
@@ -511,7 +507,7 @@ mod tests {
         let result = parse_only(price_line,
             b"P 2016-02-07 \"MUTF2351\" $5.42\r\n");
         assert_eq!(result, Ok(Price::new(
-            Date::new(2016, 2, 7),
+            Local.ymd(2016, 2, 7),
             Symbol::new("MUTF2351", SymbolRender::Quoted),
             Amount::new(
                 d128!(5.42),
