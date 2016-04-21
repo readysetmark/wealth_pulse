@@ -14,6 +14,7 @@ use chrono::date::Date;
 use chrono::offset::local::Local;
 use chrono::offset::TimeZone;
 use decimal::d128;
+use std::fmt;
 use std::fs::File;
 use std::str;
 
@@ -36,6 +37,15 @@ impl<'a> Symbol<'a> {
         Symbol {
             value: symbol,
             render: render
+        }
+    }
+}
+
+impl<'a> fmt::Display for Symbol<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.render {
+            SymbolRender::Quoted   => write!(f, "\"{}\"", self.value),
+            SymbolRender::Unquoted => write!(f, "{}", self.value),
         }
     }
 }
@@ -313,6 +323,24 @@ mod tests {
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
 
+    // TYPES
+
+    #[test]
+    fn symbol_fmt_quoted() {
+        let result =
+            format!("{}", Symbol::new("MUTF2351", SymbolRender::Quoted));
+        assert_eq!(result, "\"MUTF2351\"");
+    }
+
+    #[test]
+    fn symbol_fmt_unquoted() {
+        let result =
+            format!("{}", Symbol::new("$", SymbolRender::Unquoted));
+        assert_eq!(result, "$");
+    }
+
+    // HELPERS
+
     #[test]
     fn make_quantity_positive_value() {
         let qty = make_quantity(b'+', b"5,241.51");
@@ -324,6 +352,9 @@ mod tests {
         let qty = make_quantity(b'-', b"5,241.51");
         assert_eq!(qty, d128!(-5241.51));
     }
+
+
+    // PARSERS
 
     #[test]
     fn whitespace_space() {
