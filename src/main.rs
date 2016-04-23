@@ -132,6 +132,15 @@ impl<'a> Price<'a> {
     }
 }
 
+impl<'a> fmt::Display for Price<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "P {} {} {}",
+            self.date.format("%Y-%m-%d"),
+            self.symbol,
+            self.amount)
+    }
+}
+
 
 
 // HELPERS
@@ -403,6 +412,21 @@ mod tests {
                     SymbolPosition::Right,
                     Spacing::NoSpace)));
         assert_eq!(result, "13245.463RUST");    
+    }
+
+    #[test]
+    fn price_fmt() {
+        let result =
+            format!("{}", Price::new(
+                Local.ymd(2016, 2, 7),
+                Symbol::new("MUTF2351", SymbolRender::Quoted),
+                Amount::new(
+                    d128!(5.42),
+                    Symbol::new("$", SymbolRender::Unquoted),
+                    AmountRenderOptions::new(
+                        SymbolPosition::Left,
+                        Spacing::NoSpace))));
+        assert_eq!(result, "P 2016-02-07 \"MUTF2351\" $5.42");
     }
 
     // HELPERS
