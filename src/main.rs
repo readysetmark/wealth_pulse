@@ -326,7 +326,7 @@ fn main() {
 
     loop {
         match source.parse(price_line) {
-            Ok(price)                    => { println!("{:?}", price);
+            Ok(price)                    => { println!("{}", price);
                                               n += 1 },
             Err(StreamError::Retry)      => {}, // Needed to refill buffer
             Err(StreamError::EndOfInput) => break,
