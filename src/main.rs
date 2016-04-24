@@ -27,21 +27,21 @@ enum SymbolRender {
 }
 
 #[derive(PartialEq, Debug)]
-struct Symbol<'a> {
-    value: &'a str,
+struct Symbol {
+    value: String,
     render: SymbolRender
 }
 
-impl<'a> Symbol<'a> {
-    fn new(symbol: &'a str, render: SymbolRender) -> Symbol {
+impl Symbol {
+    fn new(symbol: &str, render: SymbolRender) -> Symbol {
         Symbol {
-            value: symbol,
+            value: symbol.to_string(),
             render: render
         }
     }
 }
 
-impl<'a> fmt::Display for Symbol<'a> {
+impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.render {
             SymbolRender::Quoted   => write!(f, "\"{}\"", self.value),
@@ -78,14 +78,14 @@ impl AmountRenderOptions {
 }
 
 #[derive(PartialEq, Debug)]
-struct Amount<'a> {
+struct Amount {
     quantity: d128,
-    symbol: Symbol<'a>,
+    symbol: Symbol,
     render_options: AmountRenderOptions
 }
 
-impl<'a> Amount<'a> {
-    fn new(quantity: d128, symbol: Symbol<'a>, render_opts: AmountRenderOptions)
+impl Amount {
+    fn new(quantity: d128, symbol: Symbol, render_opts: AmountRenderOptions)
     -> Amount {
         Amount {
             quantity: quantity,
@@ -95,7 +95,7 @@ impl<'a> Amount<'a> {
     }
 }
 
-impl<'a> fmt::Display for Amount<'a> {
+impl fmt::Display for Amount {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let spacing =
             match self.render_options.spacing {
@@ -114,16 +114,15 @@ impl<'a> fmt::Display for Amount<'a> {
 }
 
 #[derive(PartialEq, Debug)]
-struct Price<'a> {
+struct Price {
     // TODO: add line field
     date: Date<Local>,
-    symbol: Symbol<'a>,
-    amount: Amount<'a>
+    symbol: Symbol,
+    amount: Amount
 }
 
-impl<'a> Price<'a> {
-    fn new(date: Date<Local>, symbol: Symbol<'a>, amount: Amount<'a>)
-    -> Price<'a> {
+impl Price {
+    fn new(date: Date<Local>, symbol: Symbol, amount: Amount) -> Price {
         Price {
             date: date,
             symbol: symbol,
@@ -132,7 +131,7 @@ impl<'a> Price<'a> {
     }
 }
 
-impl<'a> fmt::Display for Price<'a> {
+impl fmt::Display for Price {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "P {} {} {}",
             self.date.format("%Y-%m-%d"),
@@ -317,24 +316,28 @@ fn price_line(i: Input<u8>) -> U8Result<Price> {
 // MAIN
 
 fn main() {
+    let mut prices: Vec<Price> = Vec::new();
+
     let price_db_filepath =
         "/Users/mark/Nexus/Documents/finances/ledger/.pricedb";
     let file = File::open(price_db_filepath).ok().expect("Failed to open file");
 
     let mut source = Source::new(file);
-    let mut n = 0;
 
     loop {
         match source.parse(price_line) {
-            Ok(price)                    => { println!("{}", price);
-                                              n += 1 },
+            Ok(price)                    => { prices.push(price); },
             Err(StreamError::Retry)      => {}, // Needed to refill buffer
             Err(StreamError::EndOfInput) => break,
             Err(e)                       => { panic!("{:?}", e); }
         }
     }
 
-    println!("Parsed {} prices", n);
+    for price in &prices {
+        println!("{}", price);
+    }
+
+    println!("Parsed {} prices", prices.len());
 }
 
 
@@ -637,4 +640,44 @@ mod tests {
             )
         )));
     }
+
+    // #[test]
+    // fn price_db_valid() {
+    //     let result = parse_only(price_db,
+    //         b"P 2016-02-07 \"MUTF2351\" $5.41\r\n\
+    //           P 2016-02-08 \"MUTF2351\" $5.61\r\n\
+    //           P 2016-02-09 \"MUTF2351\" $7.10\r\n");
+    //     assert_eq!(result, Ok(vec![
+    //         Price::new(
+    //             Local.ymd(2016, 2, 7),
+    //             Symbol::new("MUTF2351", SymbolRender::Quoted),
+    //             Amount::new(
+    //                 d128!(5.41),
+    //                 Symbol::new("$", SymbolRender::Unquoted),
+    //                 AmountRenderOptions::new(
+    //                     SymbolPosition::Left,
+    //                     Spacing::NoSpace))
+    //         ),
+    //         Price::new(
+    //             Local.ymd(2016, 2, 8),
+    //             Symbol::new("MUTF2351", SymbolRender::Quoted),
+    //             Amount::new(
+    //                 d128!(5.61),
+    //                 Symbol::new("$", SymbolRender::Unquoted),
+    //                 AmountRenderOptions::new(
+    //                     SymbolPosition::Left,
+    //                     Spacing::NoSpace))
+    //         ),
+    //         Price::new(
+    //             Local.ymd(2016, 2, 9),
+    //             Symbol::new("MUTF2351", SymbolRender::Quoted),
+    //             Amount::new(
+    //                 d128!(7.10),
+    //                 Symbol::new("$", SymbolRender::Unquoted),
+    //                 AmountRenderOptions::new(
+    //                     SymbolPosition::Left,
+    //                     Spacing::NoSpace))
+    //         ),
+    //     ]));
+    // }
 }
