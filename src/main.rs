@@ -14,6 +14,7 @@ use chrono::date::Date;
 use chrono::offset::local::Local;
 use chrono::offset::TimeZone;
 use decimal::d128;
+use std::fmt;
 use std::fs::File;
 use std::str;
 
@@ -26,16 +27,25 @@ enum SymbolRender {
 }
 
 #[derive(PartialEq, Debug)]
-struct Symbol<'a> {
-    value: &'a str,
+struct Symbol {
+    value: String,
     render: SymbolRender
 }
 
-impl<'a> Symbol<'a> {
-    fn new(symbol: &'a str, render: SymbolRender) -> Symbol {
+impl Symbol {
+    fn new(symbol: &str, render: SymbolRender) -> Symbol {
         Symbol {
-            value: symbol,
+            value: symbol.to_string(),
             render: render
+        }
+    }
+}
+
+impl fmt::Display for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.render {
+            SymbolRender::Quoted   => write!(f, "\"{}\"", self.value),
+            SymbolRender::Unquoted => write!(f, "{}", self.value),
         }
     }
 }
@@ -68,14 +78,14 @@ impl AmountRenderOptions {
 }
 
 #[derive(PartialEq, Debug)]
-struct Amount<'a> {
+struct Amount {
     quantity: d128,
-    symbol: Symbol<'a>,
+    symbol: Symbol,
     render_options: AmountRenderOptions
 }
 
-impl<'a> Amount<'a> {
-    fn new(quantity: d128, symbol: Symbol<'a>, render_opts: AmountRenderOptions)
+impl Amount {
+    fn new(quantity: d128, symbol: Symbol, render_opts: AmountRenderOptions)
     -> Amount {
         Amount {
             quantity: quantity,
@@ -85,22 +95,48 @@ impl<'a> Amount<'a> {
     }
 }
 
-#[derive(PartialEq, Debug)]
-struct Price<'a> {
-    // TODO: add line field
-    date: Date<Local>,
-    symbol: Symbol<'a>,
-    amount: Amount<'a>
+impl fmt::Display for Amount {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let spacing =
+            match self.render_options.spacing {
+                Spacing::Space   => " ",
+                Spacing::NoSpace => "",
+            };
+
+        match self.render_options.symbol_position {
+            SymbolPosition::Left  =>
+                write!(f, "{}{}{}", self.symbol, spacing, self.quantity),
+
+            SymbolPosition::Right =>
+                write!(f, "{}{}{}", self.quantity, spacing, self.symbol),
+        }
+    }
 }
 
-impl<'a> Price<'a> {
-    fn new(date: Date<Local>, symbol: Symbol<'a>, amount: Amount<'a>)
-    -> Price<'a> {
+#[derive(PartialEq, Debug)]
+struct Price {
+    // TODO: add line field
+    date: Date<Local>,
+    symbol: Symbol,
+    amount: Amount
+}
+
+impl Price {
+    fn new(date: Date<Local>, symbol: Symbol, amount: Amount) -> Price {
         Price {
             date: date,
             symbol: symbol,
             amount: amount
         }
+    }
+}
+
+impl fmt::Display for Price {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "P {} {} {}",
+            self.date.format("%Y-%m-%d"),
+            self.symbol,
+            self.amount)
     }
 }
 
@@ -280,24 +316,28 @@ fn price_line(i: Input<u8>) -> U8Result<Price> {
 // MAIN
 
 fn main() {
+    let mut prices: Vec<Price> = Vec::new();
+
     let price_db_filepath =
         "/Users/mark/Nexus/Documents/finances/ledger/.pricedb";
     let file = File::open(price_db_filepath).ok().expect("Failed to open file");
 
     let mut source = Source::new(file);
-    let mut n = 0;
 
     loop {
         match source.parse(price_line) {
-            Ok(price)                    => { println!("{:?}", price);
-                                              n += 1 },
+            Ok(price)                    => { prices.push(price); },
             Err(StreamError::Retry)      => {}, // Needed to refill buffer
             Err(StreamError::EndOfInput) => break,
             Err(e)                       => { panic!("{:?}", e); }
         }
     }
 
-    println!("Parsed {} prices", n);
+    for price in &prices {
+        println!("{}", price);
+    }
+
+    println!("Parsed {} prices", prices.len());
 }
 
 
@@ -313,6 +353,87 @@ mod tests {
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
 
+    // TYPES
+
+    #[test]
+    fn symbol_fmt_quoted() {
+        let result =
+            format!("{}", Symbol::new("MUTF2351", SymbolRender::Quoted));
+        assert_eq!(result, "\"MUTF2351\"");
+    }
+
+    #[test]
+    fn symbol_fmt_unquoted() {
+        let result =
+            format!("{}", Symbol::new("$", SymbolRender::Unquoted));
+        assert_eq!(result, "$");
+    }
+
+    #[test]
+    fn amount_fmt_symbol_left_with_space() {
+        let result =
+            format!("{}", Amount::new(
+                d128!(13245.00),
+                Symbol::new("US$", SymbolRender::Unquoted),
+                AmountRenderOptions::new(
+                    SymbolPosition::Left,
+                    Spacing::Space)));
+        assert_eq!(result, "US$ 13245.00");
+    }
+
+    #[test]
+    fn amount_fmt_symbol_left_no_space() {
+        let result =
+            format!("{}", Amount::new(
+                d128!(13245.00),
+                Symbol::new("$", SymbolRender::Unquoted),
+                AmountRenderOptions::new(
+                    SymbolPosition::Left,
+                    Spacing::NoSpace)));
+        assert_eq!(result, "$13245.00");   
+    }
+
+    #[test]
+    fn amount_fmt_symbol_right_with_space() {
+        let result =
+            format!("{}", Amount::new(
+                d128!(13245.463),
+                Symbol::new("MUTF2351", SymbolRender::Quoted),
+                AmountRenderOptions::new(
+                    SymbolPosition::Right,
+                    Spacing::Space)));
+        assert_eq!(result, "13245.463 \"MUTF2351\""); 
+    }
+
+    #[test]
+    fn amount_fmt_symbol_right_no_space() {
+        let result =
+            format!("{}", Amount::new(
+                d128!(13245.463),
+                Symbol::new("RUST", SymbolRender::Unquoted),
+                AmountRenderOptions::new(
+                    SymbolPosition::Right,
+                    Spacing::NoSpace)));
+        assert_eq!(result, "13245.463RUST");    
+    }
+
+    #[test]
+    fn price_fmt() {
+        let result =
+            format!("{}", Price::new(
+                Local.ymd(2016, 2, 7),
+                Symbol::new("MUTF2351", SymbolRender::Quoted),
+                Amount::new(
+                    d128!(5.42),
+                    Symbol::new("$", SymbolRender::Unquoted),
+                    AmountRenderOptions::new(
+                        SymbolPosition::Left,
+                        Spacing::NoSpace))));
+        assert_eq!(result, "P 2016-02-07 \"MUTF2351\" $5.42");
+    }
+
+    // HELPERS
+
     #[test]
     fn make_quantity_positive_value() {
         let qty = make_quantity(b'+', b"5,241.51");
@@ -324,6 +445,9 @@ mod tests {
         let qty = make_quantity(b'-', b"5,241.51");
         assert_eq!(qty, d128!(-5241.51));
     }
+
+
+    // PARSERS
 
     #[test]
     fn whitespace_space() {
@@ -516,4 +640,44 @@ mod tests {
             )
         )));
     }
+
+    // #[test]
+    // fn price_db_valid() {
+    //     let result = parse_only(price_db,
+    //         b"P 2016-02-07 \"MUTF2351\" $5.41\r\n\
+    //           P 2016-02-08 \"MUTF2351\" $5.61\r\n\
+    //           P 2016-02-09 \"MUTF2351\" $7.10\r\n");
+    //     assert_eq!(result, Ok(vec![
+    //         Price::new(
+    //             Local.ymd(2016, 2, 7),
+    //             Symbol::new("MUTF2351", SymbolRender::Quoted),
+    //             Amount::new(
+    //                 d128!(5.41),
+    //                 Symbol::new("$", SymbolRender::Unquoted),
+    //                 AmountRenderOptions::new(
+    //                     SymbolPosition::Left,
+    //                     Spacing::NoSpace))
+    //         ),
+    //         Price::new(
+    //             Local.ymd(2016, 2, 8),
+    //             Symbol::new("MUTF2351", SymbolRender::Quoted),
+    //             Amount::new(
+    //                 d128!(5.61),
+    //                 Symbol::new("$", SymbolRender::Unquoted),
+    //                 AmountRenderOptions::new(
+    //                     SymbolPosition::Left,
+    //                     Spacing::NoSpace))
+    //         ),
+    //         Price::new(
+    //             Local.ymd(2016, 2, 9),
+    //             Symbol::new("MUTF2351", SymbolRender::Quoted),
+    //             Amount::new(
+    //                 d128!(7.10),
+    //                 Symbol::new("$", SymbolRender::Unquoted),
+    //                 AmountRenderOptions::new(
+    //                     SymbolPosition::Left,
+    //                     Spacing::NoSpace))
+    //         ),
+    //     ]));
+    // }
 }
