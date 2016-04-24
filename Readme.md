@@ -29,13 +29,17 @@ Run tests via Cargo:
 Project Plan
 ------------
 
+Ledger
+* [ ] Parse ledger file
+* [ ] Validate and transform
+
+Configuration
+* [ ] Parse configuration
+
 PriceDB
 * [x] Parse pricedb file
 * [ ] Serialize pricedb file
 * [ ] Fetch new prices and store
-
-Ledger
-* [ ] Parse ledger file
 
 Reports
 * [ ] Balance report
