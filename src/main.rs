@@ -21,7 +21,7 @@ use std::str;
 // TYPES
 
 #[derive(PartialEq, Debug)]
-enum SymbolRender {
+enum QuoteOption {
     Quoted,
     Unquoted
 }
@@ -29,23 +29,23 @@ enum SymbolRender {
 #[derive(PartialEq, Debug)]
 struct Symbol {
     value: String,
-    render: SymbolRender
+    quote_option: QuoteOption
 }
 
 impl Symbol {
-    fn new(symbol: &str, render: SymbolRender) -> Symbol {
+    fn new(symbol: &str, quote_option: QuoteOption) -> Symbol {
         Symbol {
             value: symbol.to_string(),
-            render: render
+            quote_option: quote_option
         }
     }
 }
 
 impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.render {
-            SymbolRender::Quoted   => write!(f, "\"{}\"", self.value),
-            SymbolRender::Unquoted => write!(f, "{}", self.value),
+        match self.quote_option {
+            QuoteOption::Quoted   => write!(f, "\"{}\"", self.value),
+            QuoteOption::Unquoted => write!(f, "{}", self.value),
         }
     }
 }
@@ -241,14 +241,14 @@ fn quoted_symbol(i: Input<u8>) -> U8Result<Symbol> {
         let symbol = take_while1(is_quoted_symbol_char);
         token(b'\"');
 
-        ret Symbol::new(str::from_utf8(symbol).unwrap(), SymbolRender::Quoted)
+        ret Symbol::new(str::from_utf8(symbol).unwrap(), QuoteOption::Quoted)
     }
 }
 
 fn unquoted_symbol(i: Input<u8>) -> U8Result<Symbol> {
     take_while1(i, is_unquoted_symbol_char)
         .map(|b|
-            Symbol::new(str::from_utf8(b).unwrap(), SymbolRender::Unquoted))
+            Symbol::new(str::from_utf8(b).unwrap(), QuoteOption::Unquoted))
 }
 
 fn symbol(i: Input<u8>) -> U8Result<Symbol> {
@@ -344,7 +344,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::{Amount, AmountRenderOptions, Price, Spacing, Symbol,
-        SymbolPosition, SymbolRender};
+        SymbolPosition, QuoteOption};
     use super::{amount, amount_quantity_then_symbol,
         amount_symbol_then_quantity, date, day, make_quantity, month, price,
         price_line, quantity, quoted_symbol, unquoted_symbol, symbol,
@@ -358,14 +358,14 @@ mod tests {
     #[test]
     fn symbol_fmt_quoted() {
         let result =
-            format!("{}", Symbol::new("MUTF2351", SymbolRender::Quoted));
+            format!("{}", Symbol::new("MUTF2351", QuoteOption::Quoted));
         assert_eq!(result, "\"MUTF2351\"");
     }
 
     #[test]
     fn symbol_fmt_unquoted() {
         let result =
-            format!("{}", Symbol::new("$", SymbolRender::Unquoted));
+            format!("{}", Symbol::new("$", QuoteOption::Unquoted));
         assert_eq!(result, "$");
     }
 
@@ -374,7 +374,7 @@ mod tests {
         let result =
             format!("{}", Amount::new(
                 d128!(13245.00),
-                Symbol::new("US$", SymbolRender::Unquoted),
+                Symbol::new("US$", QuoteOption::Unquoted),
                 AmountRenderOptions::new(
                     SymbolPosition::Left,
                     Spacing::Space)));
@@ -386,7 +386,7 @@ mod tests {
         let result =
             format!("{}", Amount::new(
                 d128!(13245.00),
-                Symbol::new("$", SymbolRender::Unquoted),
+                Symbol::new("$", QuoteOption::Unquoted),
                 AmountRenderOptions::new(
                     SymbolPosition::Left,
                     Spacing::NoSpace)));
@@ -398,7 +398,7 @@ mod tests {
         let result =
             format!("{}", Amount::new(
                 d128!(13245.463),
-                Symbol::new("MUTF2351", SymbolRender::Quoted),
+                Symbol::new("MUTF2351", QuoteOption::Quoted),
                 AmountRenderOptions::new(
                     SymbolPosition::Right,
                     Spacing::Space)));
@@ -410,7 +410,7 @@ mod tests {
         let result =
             format!("{}", Amount::new(
                 d128!(13245.463),
-                Symbol::new("RUST", SymbolRender::Unquoted),
+                Symbol::new("RUST", QuoteOption::Unquoted),
                 AmountRenderOptions::new(
                     SymbolPosition::Right,
                     Spacing::NoSpace)));
@@ -422,10 +422,10 @@ mod tests {
         let result =
             format!("{}", Price::new(
                 Local.ymd(2016, 2, 7),
-                Symbol::new("MUTF2351", SymbolRender::Quoted),
+                Symbol::new("MUTF2351", QuoteOption::Quoted),
                 Amount::new(
                     d128!(5.42),
-                    Symbol::new("$", SymbolRender::Unquoted),
+                    Symbol::new("$", QuoteOption::Unquoted),
                     AmountRenderOptions::new(
                         SymbolPosition::Left,
                         Spacing::NoSpace))));
@@ -494,37 +494,37 @@ mod tests {
     #[test]
     fn quoted_symbol_valid() {
         let result = parse_only(quoted_symbol, b"\"MUTF2351\"");
-        assert_eq!(result, Ok(Symbol::new("MUTF2351", SymbolRender::Quoted)));
+        assert_eq!(result, Ok(Symbol::new("MUTF2351", QuoteOption::Quoted)));
     }
 
     #[test]
     fn unquoted_symbol_just_symbol() {
         let result = parse_only(unquoted_symbol, b"$");
-        assert_eq!(result, Ok(Symbol::new("$", SymbolRender::Unquoted)));
+        assert_eq!(result, Ok(Symbol::new("$", QuoteOption::Unquoted)));
     }
 
     #[test]
     fn unquoted_symbol_symbol_and_letters() {
         let result = parse_only(unquoted_symbol, b"US$");
-        assert_eq!(result, Ok(Symbol::new("US$", SymbolRender::Unquoted)));
+        assert_eq!(result, Ok(Symbol::new("US$", QuoteOption::Unquoted)));
     }
 
     #[test]
     fn unquoted_symbol_just_letters() {
         let result = parse_only(unquoted_symbol, b"RUST");
-        assert_eq!(result, Ok(Symbol::new("RUST", SymbolRender::Unquoted)));
+        assert_eq!(result, Ok(Symbol::new("RUST", QuoteOption::Unquoted)));
     }
 
     #[test]
     fn symbol_quoted() {
         let result = parse_only(symbol, b"\"MUTF2351\"");
-        assert_eq!(result, Ok(Symbol::new("MUTF2351", SymbolRender::Quoted)));
+        assert_eq!(result, Ok(Symbol::new("MUTF2351", QuoteOption::Quoted)));
     }
 
     #[test]
     fn symbol_unquoted() {
         let result = parse_only(symbol, b"$");
-        assert_eq!(result, Ok(Symbol::new("$", SymbolRender::Unquoted)));
+        assert_eq!(result, Ok(Symbol::new("$", QuoteOption::Unquoted)));
     }
 
     #[test]
@@ -556,7 +556,7 @@ mod tests {
         let result = parse_only(amount_symbol_then_quantity, b"$13,245.00");
         assert_eq!(result, Ok(Amount::new(
             d128!(13245.00),
-            Symbol::new("$", SymbolRender::Unquoted),
+            Symbol::new("$", QuoteOption::Unquoted),
             AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)
         )));
     }
@@ -566,7 +566,7 @@ mod tests {
         let result = parse_only(amount_symbol_then_quantity, b"US$ -13,245.00");
         assert_eq!(result, Ok(Amount::new(
             d128!(-13245.00),
-            Symbol::new("US$", SymbolRender::Unquoted),
+            Symbol::new("US$", QuoteOption::Unquoted),
             AmountRenderOptions::new(SymbolPosition::Left, Spacing::Space)
         )));
     }
@@ -576,7 +576,7 @@ mod tests {
         let result = parse_only(amount_quantity_then_symbol, b"13,245.463RUST");
         assert_eq!(result, Ok(Amount::new(
             d128!(13245.463),
-            Symbol::new("RUST", SymbolRender::Unquoted),
+            Symbol::new("RUST", QuoteOption::Unquoted),
             AmountRenderOptions::new(SymbolPosition::Right, Spacing::NoSpace)
         )));
     }
@@ -587,7 +587,7 @@ mod tests {
             b"13,245.463 \"MUTF2351\"");
         assert_eq!(result, Ok(Amount::new(
             d128!(13245.463),
-            Symbol::new("MUTF2351", SymbolRender::Quoted),
+            Symbol::new("MUTF2351", QuoteOption::Quoted),
             AmountRenderOptions::new(SymbolPosition::Right, Spacing::Space)
         )));
     }    
@@ -597,7 +597,7 @@ mod tests {
         let result = parse_only(amount, b"$13,245.46");
         assert_eq!(result, Ok(Amount::new(
             d128!(13245.46),
-            Symbol::new("$", SymbolRender::Unquoted),
+            Symbol::new("$", QuoteOption::Unquoted),
             AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)
         )));
     }
@@ -607,7 +607,7 @@ mod tests {
         let result = parse_only(amount, b"13,245.463 \"MUTF2351\"");
         assert_eq!(result, Ok(Amount::new(
             d128!(13245.463),
-            Symbol::new("MUTF2351", SymbolRender::Quoted),
+            Symbol::new("MUTF2351", QuoteOption::Quoted),
             AmountRenderOptions::new(SymbolPosition::Right, Spacing::Space)
         )));
     }
@@ -617,10 +617,10 @@ mod tests {
         let result = parse_only(price, b"P 2016-02-07 \"MUTF2351\" $5.42");
         assert_eq!(result, Ok(Price::new(
             Local.ymd(2016, 2, 7),
-            Symbol::new("MUTF2351", SymbolRender::Quoted),
+            Symbol::new("MUTF2351", QuoteOption::Quoted),
             Amount::new(
                 d128!(5.42),
-                Symbol::new("$", SymbolRender::Unquoted),
+                Symbol::new("$", QuoteOption::Unquoted),
                 AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)
             )
         )));
@@ -632,10 +632,10 @@ mod tests {
             b"P 2016-02-07 \"MUTF2351\" $5.42\r\n");
         assert_eq!(result, Ok(Price::new(
             Local.ymd(2016, 2, 7),
-            Symbol::new("MUTF2351", SymbolRender::Quoted),
+            Symbol::new("MUTF2351", QuoteOption::Quoted),
             Amount::new(
                 d128!(5.42),
-                Symbol::new("$", SymbolRender::Unquoted),
+                Symbol::new("$", QuoteOption::Unquoted),
                 AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)
             )
         )));
@@ -650,30 +650,30 @@ mod tests {
     //     assert_eq!(result, Ok(vec![
     //         Price::new(
     //             Local.ymd(2016, 2, 7),
-    //             Symbol::new("MUTF2351", SymbolRender::Quoted),
+    //             Symbol::new("MUTF2351", QuoteOption::Quoted),
     //             Amount::new(
     //                 d128!(5.41),
-    //                 Symbol::new("$", SymbolRender::Unquoted),
+    //                 Symbol::new("$", QuoteOption::Unquoted),
     //                 AmountRenderOptions::new(
     //                     SymbolPosition::Left,
     //                     Spacing::NoSpace))
     //         ),
     //         Price::new(
     //             Local.ymd(2016, 2, 8),
-    //             Symbol::new("MUTF2351", SymbolRender::Quoted),
+    //             Symbol::new("MUTF2351", QuoteOption::Quoted),
     //             Amount::new(
     //                 d128!(5.61),
-    //                 Symbol::new("$", SymbolRender::Unquoted),
+    //                 Symbol::new("$", QuoteOption::Unquoted),
     //                 AmountRenderOptions::new(
     //                     SymbolPosition::Left,
     //                     Spacing::NoSpace))
     //         ),
     //         Price::new(
     //             Local.ymd(2016, 2, 9),
-    //             Symbol::new("MUTF2351", SymbolRender::Quoted),
+    //             Symbol::new("MUTF2351", QuoteOption::Quoted),
     //             Amount::new(
     //                 d128!(7.10),
-    //                 Symbol::new("$", SymbolRender::Unquoted),
+    //                 Symbol::new("$", QuoteOption::Unquoted),
     //                 AmountRenderOptions::new(
     //                     SymbolPosition::Left,
     //                     Spacing::NoSpace))
