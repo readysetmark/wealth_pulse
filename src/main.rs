@@ -4,6 +4,7 @@ extern crate chomp;
 extern crate chrono;
 #[macro_use]
 extern crate decimal;
+extern crate wealth_pulse;
 
 use core::str::FromStr;
 use chomp::{Input, U8Result};
@@ -17,101 +18,10 @@ use decimal::d128;
 use std::fmt;
 use std::fs::File;
 use std::str;
+use wealth_pulse::core::amount::*;
+use wealth_pulse::core::symbol::*;
 
 // TYPES
-
-#[derive(PartialEq, Debug)]
-enum QuoteOption {
-    Quoted,
-    Unquoted
-}
-
-#[derive(PartialEq, Debug)]
-struct Symbol {
-    value: String,
-    quote_option: QuoteOption
-}
-
-impl Symbol {
-    fn new(symbol: &str, quote_option: QuoteOption) -> Symbol {
-        Symbol {
-            value: symbol.to_string(),
-            quote_option: quote_option
-        }
-    }
-}
-
-impl fmt::Display for Symbol {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.quote_option {
-            QuoteOption::Quoted   => write!(f, "\"{}\"", self.value),
-            QuoteOption::Unquoted => write!(f, "{}", self.value),
-        }
-    }
-}
-
-#[derive(PartialEq, Debug)]
-enum SymbolPosition {
-    Left,
-    Right
-}
-
-#[derive(PartialEq, Debug)]
-enum Spacing {
-    Space,
-    NoSpace
-}
-
-#[derive(PartialEq, Debug)]
-struct AmountRenderOptions {
-    symbol_position: SymbolPosition,
-    spacing: Spacing
-}
-
-impl AmountRenderOptions {
-    fn new(position: SymbolPosition, spacing: Spacing) -> AmountRenderOptions {
-        AmountRenderOptions {
-            symbol_position: position,
-            spacing: spacing
-        }
-    }
-}
-
-#[derive(PartialEq, Debug)]
-struct Amount {
-    quantity: d128,
-    symbol: Symbol,
-    render_options: AmountRenderOptions
-}
-
-impl Amount {
-    fn new(quantity: d128, symbol: Symbol, render_opts: AmountRenderOptions)
-    -> Amount {
-        Amount {
-            quantity: quantity,
-            symbol: symbol,
-            render_options: render_opts
-        }
-    }
-}
-
-impl fmt::Display for Amount {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let spacing =
-            match self.render_options.spacing {
-                Spacing::Space   => " ",
-                Spacing::NoSpace => "",
-            };
-
-        match self.render_options.symbol_position {
-            SymbolPosition::Left  =>
-                write!(f, "{}{}{}", self.symbol, spacing, self.quantity),
-
-            SymbolPosition::Right =>
-                write!(f, "{}{}{}", self.quantity, spacing, self.symbol),
-        }
-    }
-}
 
 #[derive(PartialEq, Debug)]
 struct Price {
@@ -343,8 +253,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{Amount, AmountRenderOptions, Price, Spacing, Symbol,
-        SymbolPosition, QuoteOption};
+    use super::{Price};
     use super::{amount, amount_quantity_then_symbol,
         amount_symbol_then_quantity, date, day, make_quantity, month, price,
         price_line, quantity, quoted_symbol, unquoted_symbol, symbol,
@@ -352,70 +261,10 @@ mod tests {
     use chomp::{parse_only};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
+    use wealth_pulse::core::amount::*;
+    use wealth_pulse::core::symbol::*;
 
     // TYPES
-
-    #[test]
-    fn symbol_fmt_quoted() {
-        let result =
-            format!("{}", Symbol::new("MUTF2351", QuoteOption::Quoted));
-        assert_eq!(result, "\"MUTF2351\"");
-    }
-
-    #[test]
-    fn symbol_fmt_unquoted() {
-        let result =
-            format!("{}", Symbol::new("$", QuoteOption::Unquoted));
-        assert_eq!(result, "$");
-    }
-
-    #[test]
-    fn amount_fmt_symbol_left_with_space() {
-        let result =
-            format!("{}", Amount::new(
-                d128!(13245.00),
-                Symbol::new("US$", QuoteOption::Unquoted),
-                AmountRenderOptions::new(
-                    SymbolPosition::Left,
-                    Spacing::Space)));
-        assert_eq!(result, "US$ 13245.00");
-    }
-
-    #[test]
-    fn amount_fmt_symbol_left_no_space() {
-        let result =
-            format!("{}", Amount::new(
-                d128!(13245.00),
-                Symbol::new("$", QuoteOption::Unquoted),
-                AmountRenderOptions::new(
-                    SymbolPosition::Left,
-                    Spacing::NoSpace)));
-        assert_eq!(result, "$13245.00");   
-    }
-
-    #[test]
-    fn amount_fmt_symbol_right_with_space() {
-        let result =
-            format!("{}", Amount::new(
-                d128!(13245.463),
-                Symbol::new("MUTF2351", QuoteOption::Quoted),
-                AmountRenderOptions::new(
-                    SymbolPosition::Right,
-                    Spacing::Space)));
-        assert_eq!(result, "13245.463 \"MUTF2351\""); 
-    }
-
-    #[test]
-    fn amount_fmt_symbol_right_no_space() {
-        let result =
-            format!("{}", Amount::new(
-                d128!(13245.463),
-                Symbol::new("RUST", QuoteOption::Unquoted),
-                AmountRenderOptions::new(
-                    SymbolPosition::Right,
-                    Spacing::NoSpace)));
-        assert_eq!(result, "13245.463RUST");    
-    }
 
     #[test]
     fn price_fmt() {
