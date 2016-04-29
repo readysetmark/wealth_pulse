@@ -192,17 +192,14 @@ fn price_line(i: Input<u8>) -> U8Result<Price> {
 }
 
 
+// PARSING
 
-// MAIN
-
-fn main() {
-    let mut prices: Vec<Price> = Vec::new();
-
-    let price_db_filepath =
-        "/Users/mark/Nexus/Documents/finances/ledger/.pricedb";
-    let file = File::open(price_db_filepath).ok().expect("Failed to open file");
+fn parse_price_db(file_path: &str) -> Vec<Price> {
+    let file = File::open(file_path).ok().expect("Failed to open file");
 
     let mut source = Source::new(file);
+
+    let mut prices: Vec<Price> = Vec::new();
 
     loop {
         match source.parse(price_line) {
@@ -212,6 +209,18 @@ fn main() {
             Err(e)                       => { panic!("{:?}", e); }
         }
     }
+
+    prices
+}
+
+
+// MAIN
+
+fn main() {
+    let price_db_filepath =
+        "/Users/mark/Nexus/Documents/finances/ledger/.pricedb";
+
+    let prices = parse_price_db(price_db_filepath);
 
     for price in &prices {
         println!("{}", price);
