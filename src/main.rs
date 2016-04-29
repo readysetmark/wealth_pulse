@@ -15,41 +15,11 @@ use chrono::date::Date;
 use chrono::offset::local::Local;
 use chrono::offset::TimeZone;
 use decimal::d128;
-use std::fmt;
 use std::fs::File;
 use std::str;
 use wealth_pulse::core::amount::*;
+use wealth_pulse::core::price::*;
 use wealth_pulse::core::symbol::*;
-
-// TYPES
-
-#[derive(PartialEq, Debug)]
-struct Price {
-    // TODO: add line field
-    date: Date<Local>,
-    symbol: Symbol,
-    amount: Amount
-}
-
-impl Price {
-    fn new(date: Date<Local>, symbol: Symbol, amount: Amount) -> Price {
-        Price {
-            date: date,
-            symbol: symbol,
-            amount: amount
-        }
-    }
-}
-
-impl fmt::Display for Price {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "P {} {} {}",
-            self.date.format("%Y-%m-%d"),
-            self.symbol,
-            self.amount)
-    }
-}
-
 
 
 // HELPERS
@@ -253,7 +223,6 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{Price};
     use super::{amount, amount_quantity_then_symbol,
         amount_symbol_then_quantity, date, day, make_quantity, month, price,
         price_line, quantity, quoted_symbol, unquoted_symbol, symbol,
@@ -262,24 +231,8 @@ mod tests {
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use wealth_pulse::core::amount::*;
+    use wealth_pulse::core::price::*;
     use wealth_pulse::core::symbol::*;
-
-    // TYPES
-
-    #[test]
-    fn price_fmt() {
-        let result =
-            format!("{}", Price::new(
-                Local.ymd(2016, 2, 7),
-                Symbol::new("MUTF2351", QuoteOption::Quoted),
-                Amount::new(
-                    d128!(5.42),
-                    Symbol::new("$", QuoteOption::Unquoted),
-                    AmountRenderOptions::new(
-                        SymbolPosition::Left,
-                        Spacing::NoSpace))));
-        assert_eq!(result, "P 2016-02-07 \"MUTF2351\" $5.42");
-    }
 
     // HELPERS
 
