@@ -192,21 +192,20 @@ fn price_line(i: Input<u8>) -> U8Result<Price> {
 }
 
 
-// PARSING
+// FILES
 
-fn parse_price_db(file_path: &str) -> Vec<Price> {
+fn pricedb_file(file_path: &str) -> Vec<Price> {
     let file = File::open(file_path).ok().expect("Failed to open file");
-
     let mut source = Source::new(file);
 
     let mut prices: Vec<Price> = Vec::new();
 
     loop {
         match source.parse(price_line) {
-            Ok(price)                    => { prices.push(price); },
+            Ok(price)                    => prices.push(price),
             Err(StreamError::Retry)      => {}, // Needed to refill buffer
             Err(StreamError::EndOfInput) => break,
-            Err(e)                       => { panic!("{:?}", e); }
+            Err(e)                       => panic!("{:?}", e),
         }
     }
 
@@ -217,10 +216,10 @@ fn parse_price_db(file_path: &str) -> Vec<Price> {
 // MAIN
 
 fn main() {
-    let price_db_filepath =
+    let pricedb_filepath =
         "/Users/mark/Nexus/Documents/finances/ledger/.pricedb";
 
-    let prices = parse_price_db(price_db_filepath);
+    let prices = pricedb_file(pricedb_filepath);
 
     for price in &prices {
         println!("{}", price);
@@ -234,8 +233,8 @@ fn main() {
 mod tests {
     use super::{amount, amount_quantity_then_symbol,
         amount_symbol_then_quantity, date, day, make_quantity, month, price,
-        price_line, quantity, quoted_symbol, unquoted_symbol, symbol,
-        whitespace, year};
+        pricedb_file, price_line, quantity, quoted_symbol, unquoted_symbol,
+        symbol, whitespace, year};
     use chomp::{parse_only};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
@@ -452,43 +451,63 @@ mod tests {
         )));
     }
 
-    // #[test]
-    // fn price_db_valid() {
-    //     let result = parse_only(price_db,
-    //         b"P 2016-02-07 \"MUTF2351\" $5.41\r\n\
-    //           P 2016-02-08 \"MUTF2351\" $5.61\r\n\
-    //           P 2016-02-09 \"MUTF2351\" $7.10\r\n");
-    //     assert_eq!(result, Ok(vec![
-    //         Price::new(
-    //             Local.ymd(2016, 2, 7),
-    //             Symbol::new("MUTF2351", QuoteOption::Quoted),
-    //             Amount::new(
-    //                 d128!(5.41),
-    //                 Symbol::new("$", QuoteOption::Unquoted),
-    //                 AmountRenderOptions::new(
-    //                     SymbolPosition::Left,
-    //                     Spacing::NoSpace))
-    //         ),
-    //         Price::new(
-    //             Local.ymd(2016, 2, 8),
-    //             Symbol::new("MUTF2351", QuoteOption::Quoted),
-    //             Amount::new(
-    //                 d128!(5.61),
-    //                 Symbol::new("$", QuoteOption::Unquoted),
-    //                 AmountRenderOptions::new(
-    //                     SymbolPosition::Left,
-    //                     Spacing::NoSpace))
-    //         ),
-    //         Price::new(
-    //             Local.ymd(2016, 2, 9),
-    //             Symbol::new("MUTF2351", QuoteOption::Quoted),
-    //             Amount::new(
-    //                 d128!(7.10),
-    //                 Symbol::new("$", QuoteOption::Unquoted),
-    //                 AmountRenderOptions::new(
-    //                     SymbolPosition::Left,
-    //                     Spacing::NoSpace))
-    //         ),
-    //     ]));
-    // }
+    #[test]
+    fn pricedb_empty() {
+        let result = pricedb_file("./test/data/empty.pricedb");
+        assert_eq!(result, vec![]);
+    }
+
+    #[test]
+    fn pricedb_single() {
+        let result = pricedb_file("./test/data/single.pricedb");
+        assert_eq!(result, vec![
+            Price::new(
+                Local.ymd(2016, 2, 7),
+                Symbol::new("MUTF2351", QuoteOption::Quoted),
+                Amount::new(
+                    d128!(5.41),
+                    Symbol::new("$", QuoteOption::Unquoted),
+                    AmountRenderOptions::new(
+                        SymbolPosition::Left,
+                        Spacing::NoSpace))
+            ),
+        ]);
+    }
+
+    #[test]
+    fn pricedb_multiple() {
+        let result = pricedb_file("./test/data/multiple.pricedb");
+        assert_eq!(result, vec![
+            Price::new(
+                Local.ymd(2016, 2, 7),
+                Symbol::new("MUTF2351", QuoteOption::Quoted),
+                Amount::new(
+                    d128!(5.41),
+                    Symbol::new("$", QuoteOption::Unquoted),
+                    AmountRenderOptions::new(
+                        SymbolPosition::Left,
+                        Spacing::NoSpace))
+            ),
+            Price::new(
+                Local.ymd(2016, 2, 8),
+                Symbol::new("MUTF2351", QuoteOption::Quoted),
+                Amount::new(
+                    d128!(5.61),
+                    Symbol::new("$", QuoteOption::Unquoted),
+                    AmountRenderOptions::new(
+                        SymbolPosition::Left,
+                        Spacing::NoSpace))
+            ),
+            Price::new(
+                Local.ymd(2016, 2, 9),
+                Symbol::new("MUTF2351", QuoteOption::Quoted),
+                Amount::new(
+                    d128!(7.10),
+                    Symbol::new("$", QuoteOption::Unquoted),
+                    AmountRenderOptions::new(
+                        SymbolPosition::Left,
+                        Spacing::NoSpace))
+            ),
+        ]);
+    }
 }
