@@ -1,6 +1,8 @@
 Wealth Pulse
 ============
 
+[![Build Status](https://travis-ci.org/readysetmark/wealth_pulse.svg?branch=master)](https://travis-ci.org/readysetmark/wealth_pulse)
+
 Wealth Pulse personal finance tracking application, of sorts, supporting 
 double-entry accounting. "Of sorts" because it is only used for reporting --
 data entry is done via any text editor in a ledger file. Wealth Pulse provides
