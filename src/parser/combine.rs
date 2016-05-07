@@ -29,12 +29,6 @@ fn two_digits_to_u32((x, y): (char, char)) -> u32 {
 
 // PARSERS
 
-/// Gets the current line number.
-fn line_number<I>(input: State<I>) -> ParseResult<i32, I>
-where I: Stream<Item=char> {
-    Ok((input.position.line, Consumed::Empty(input)))
-}
-
 /// Parses at least one whitespace character (space or tab).
 fn whitespace<I>(input: State<I>) -> ParseResult<String, I>
 where I: Stream<Item=char> {
@@ -207,10 +201,9 @@ pub fn pricedb_file(file_path: &str) -> Vec<Price> {
 mod tests {
     use super::{two_digits_to_u32};
     use super::{amount, amount_quantity_then_symbol,
-        amount_symbol_then_quantity, date, line_ending, line_number, price,
-        price_db, quantity, quoted_symbol, symbol, two_digits, unquoted_symbol,
+        amount_symbol_then_quantity, date, line_ending, price, price_db,
+        quantity, quoted_symbol, symbol, two_digits, unquoted_symbol,
         whitespace};
-    use chrono::date::Date;
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
@@ -230,15 +223,6 @@ mod tests {
 
     // PARSERS
     
-    #[test]
-    fn line_number_test() {
-        let (line_num, remaining_input) = parser(line_number)
-            .parse("hello")
-            .unwrap();
-        assert_eq!(line_num, 1);
-        assert_eq!(remaining_input, "hello");
-    }
-
     #[test]
     fn whitespace_empty_is_error()
     {
