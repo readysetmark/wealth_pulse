@@ -119,8 +119,7 @@ fn quoted_symbol(i: Input<u8>) -> U8Result<Symbol> {
 
 fn unquoted_symbol(i: Input<u8>) -> U8Result<Symbol> {
     take_while1(i, is_unquoted_symbol_char)
-        .map(|b|
-            Symbol::new(str::from_utf8(b).unwrap(), QuoteOption::Unquoted))
+        .map(|b| Symbol::new(str::from_utf8(b).unwrap(), QuoteOption::Unquoted))
 }
 
 fn symbol(i: Input<u8>) -> U8Result<Symbol> {
@@ -187,6 +186,7 @@ fn price_line(i: Input<u8>) -> U8Result<Price> {
 // FILES
 
 pub fn pricedb_file(file_path: &str) -> Vec<Price> {
+    println!("Using chomp");
     let file = File::open(file_path).ok().expect("Failed to open file");
     let mut source = Source::new(file);
 
