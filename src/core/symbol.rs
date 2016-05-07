@@ -14,9 +14,10 @@ pub struct Symbol {
 }
 
 impl Symbol {
-    pub fn new(symbol: &str, quote_option: QuoteOption) -> Symbol {
+    pub fn new<S>(symbol: S, quote_option: QuoteOption) -> Symbol
+    where S: Into<String> {
         Symbol {
-            value: symbol.to_string(),
+            value: symbol.into(),
             quote_option: quote_option
         }
     }

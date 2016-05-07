@@ -1,6 +1,7 @@
 extern crate wealth_pulse;
 
-use wealth_pulse::parser::chomp::{pricedb_file};
+//use wealth_pulse::parser::chomp::{pricedb_file};
+use wealth_pulse::parser::combine::{pricedb_file};
 
 // MAIN
 
@@ -10,9 +11,9 @@ fn main() {
 
     let prices = pricedb_file(pricedb_filepath);
 
-    for price in &prices {
-        println!("{}", price);
-    }
+    // for price in &prices {
+    //     println!("{}", price);
+    // }
 
     println!("Parsed {} prices", prices.len());
 }
