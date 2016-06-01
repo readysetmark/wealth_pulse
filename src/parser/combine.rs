@@ -5,7 +5,7 @@ use chrono::offset::TimeZone;
 use combine::{char, crlf, digit, many, many1, newline, optional, parser, satisfy, sep_end_by,
     Parser, ParserExt, ParseResult};
 use combine::combinator::FnParser;
-use combine::primitives::{Consumed, State, Stream};
+use combine::primitives::{State, Stream};
 use decimal::d128;
 use std::fs::File;
 use std::io::Read;
@@ -171,8 +171,7 @@ where I: Stream<Item=char> {
 
 // FILES
 
-pub fn pricedb_file(file_path: &str) -> Vec<Price> {
-    println!("Using combine");
+pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
     let mut file = File::open(file_path).ok().expect("Failed to open file");
     let mut contents = String::new();
     
@@ -182,7 +181,7 @@ pub fn pricedb_file(file_path: &str) -> Vec<Price> {
 
     match result {
         Ok((prices, _)) => prices,
-        Err(err) => panic!("{}", err)
+        Err(err) => panic!("{}", err),
     }
 }
 
