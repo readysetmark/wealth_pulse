@@ -2,9 +2,8 @@ use rust_core::str::FromStr;
 use chrono::date::Date;
 use chrono::offset::local::Local;
 use chrono::offset::TimeZone;
-use combine::{char, crlf, digit, many, many1, newline,
-    optional, parser, satisfy, sep_end_by, Parser, ParserExt,
-    ParseResult};
+use combine::{char, crlf, digit, many, many1, newline, optional, parser, satisfy, sep_end_by,
+    Parser, ParserExt, ParseResult};
 use combine::combinator::FnParser;
 use combine::primitives::{Consumed, State, Stream};
 use decimal::d128;
@@ -39,10 +38,8 @@ where I: Stream<Item=char> {
 /// Parses a Unix or Windows style line endings
 fn line_ending<I>(input: State<I>) -> ParseResult<String, I>
 where I: Stream<Item=char> {
-    crlf()
-        .map(|x: char| x.to_string())
-        .or(newline()
-            .map(|x: char| x.to_string()))
+    crlf().map(|x: char| x.to_string())
+        .or(newline().map(|x: char| x.to_string()))
         .parse_state(input)
 }
 
@@ -51,8 +48,7 @@ fn two_digits<I>() -> FnParser<I, fn (State<I>) -> ParseResult<u32, I>>
 where I: Stream<Item=char> {
     fn two_digits_<I>(input: State<I>) -> ParseResult<u32, I>
     where I: Stream<Item=char> {
-        (digit(), digit())
-            .map(two_digits_to_u32)
+        (digit(), digit()).map(two_digits_to_u32)
             .parse_state(input)
     }
     parser(two_digits_)
@@ -72,13 +68,12 @@ where I: Stream<Item=char> {
 fn quantity<I>(input: State<I>) -> ParseResult<d128,I>
 where I: Stream<Item=char> {
     (
-        optional(char('-'))
-            .map(|x| {
-                match x {
-                    Some(_) => "-".to_string(),
-                    None => "".to_string()
-                }
-            }),
+        optional(char('-')).map(|x| {
+            match x {
+                Some(_) => "-".to_string(),
+                None => "".to_string()
+            }
+        }),
         many1::<String, _>(satisfy(|c : char| {
             c.is_digit(10) || c == ',' || c == '.'
         }))
@@ -122,11 +117,9 @@ where I: Stream<Item=char> {
         .map(|(symbol, opt_whitespace, quantity)| {
             let spacing = match opt_whitespace {
                 Some(_) => Spacing::Space,
-                None => Spacing::NoSpace
+                None => Spacing::NoSpace,
             };
-            let render_opts = AmountRenderOptions::new(
-                SymbolPosition::Left,
-                spacing);
+            let render_opts = AmountRenderOptions::new(SymbolPosition::Left, spacing);
             Amount::new(quantity, symbol, render_opts)
         })
         .parse_state(input)
@@ -139,11 +132,9 @@ where I: Stream<Item=char> {
         .map(|(quantity, opt_whitespace, symbol)| {
             let spacing = match opt_whitespace {
                 Some(_) => Spacing::Space,
-                None => Spacing::NoSpace
+                None => Spacing::NoSpace,
             };
-            let render_opts = AmountRenderOptions::new(
-                SymbolPosition::Right,
-                spacing);
+            let render_opts = AmountRenderOptions::new(SymbolPosition::Right, spacing);
             Amount::new(quantity, symbol, render_opts)
         })
         .parse_state(input)
@@ -199,11 +190,9 @@ pub fn pricedb_file(file_path: &str) -> Vec<Price> {
 
 #[cfg(test)]
 mod tests {
-    use super::{two_digits_to_u32};
-    use super::{amount, amount_quantity_then_symbol,
-        amount_symbol_then_quantity, date, line_ending, price, price_db,
-        quantity, quoted_symbol, symbol, two_digits, unquoted_symbol,
-        whitespace};
+    use super::{amount, amount_quantity_then_symbol, amount_symbol_then_quantity, date,
+        line_ending, price, price_db, quantity, quoted_symbol, symbol, two_digits,
+        two_digits_to_u32, unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
@@ -227,8 +216,7 @@ mod tests {
     fn whitespace_empty_is_error()
     {
         let result = parser(whitespace)
-            .parse("")
-            .map(|x| x.0);
+            .parse("").map(|x| x.0);
         assert!(result.is_err());
     }
 
@@ -236,8 +224,7 @@ mod tests {
     fn whitespace_space()
     {
         let result = parser(whitespace)
-            .parse(" ")
-            .map(|x| x.0);
+            .parse(" ").map(|x| x.0);
         assert_eq!(result, Ok(" ".to_string()));
     }
 
@@ -245,40 +232,35 @@ mod tests {
     fn whitespace_tab()
     {
         let result = parser(whitespace)
-            .parse("\t")
-            .map(|x| x.0);
+            .parse("\t").map(|x| x.0);
         assert_eq!(result, Ok("\t".to_string()));
     }
 
     #[test]
     fn line_ending_unix() {
         let result = parser(line_ending)
-            .parse("\n")
-            .map(|x| x.0);
+            .parse("\n").map(|x| x.0);
         assert_eq!(result, Ok("\n".to_string()));
     }
 
     #[test]
     fn line_ending_windows() {
         let result = parser(line_ending)
-            .parse("\r\n")
-            .map(|x| x.0);
+            .parse("\r\n").map(|x| x.0);
         assert_eq!(result, Ok("\n".to_string()));
     }
 
     #[test]
     fn two_digits_test() {
         let result = two_digits()
-            .parse("09")
-            .map(|x| x.0);
+            .parse("09").map(|x| x.0);
         assert_eq!(result, Ok(9));
     }
 
     #[test]
     fn date_test() {
         let result = parser(date)
-            .parse("2015-10-17")
-            .map(|x| x.0);
+            .parse("2015-10-17").map(|x| x.0);
         assert_eq!(result, Ok(Local.ymd(2015, 10, 17)));
     }
 
@@ -286,8 +268,7 @@ mod tests {
     fn quantity_negative_no_fractional_part()
     {
         let result = parser(quantity)
-            .parse("-1110")
-            .map(|x| x.0);
+            .parse("-1110").map(|x| x.0);
         assert_eq!(result, Ok(d128!(-1110)));
     }
 
@@ -295,8 +276,7 @@ mod tests {
     fn quantity_positive_no_fractional_part()
     {
         let result = parser(quantity)
-            .parse("2,314")
-            .map(|x| x.0);
+            .parse("2,314").map(|x| x.0);
         assert_eq!(result, Ok(d128!(2314)));
     }
 
@@ -304,8 +284,7 @@ mod tests {
     fn quantity_negative_with_fractional_part()
     {
         let result = parser(quantity)
-            .parse("-1,110.38")
-            .map(|x| x.0);
+            .parse("-1,110.38").map(|x| x.0);
         assert_eq!(result, Ok(d128!(-1110.38)));
     }
 
@@ -313,181 +292,136 @@ mod tests {
     fn quantity_positive_with_fractional_part()
     {
         let result = parser(quantity)
-            .parse("24521.793")
-            .map(|x| x.0);
+            .parse("24521.793").map(|x| x.0);
         assert_eq!(result, Ok(d128!(24521.793)));
     }
 
     #[test]
     fn quoted_symbol_test() {
         let result = parser(quoted_symbol)
-            .parse("\"MUTF2351\"")
-            .map(|x| x.0);
+            .parse("\"MUTF2351\"").map(|x| x.0);
         assert_eq!(result, Ok(Symbol::new("MUTF2351", QuoteOption::Quoted)));
     }
 
     #[test]
     fn unquoted_symbol_just_symbol() {
         let result = parser(unquoted_symbol)
-            .parse("$")
-            .map(|x| x.0);
+            .parse("$").map(|x| x.0);
         assert_eq!(result, Ok(Symbol::new("$", QuoteOption::Unquoted)));
     }
 
     #[test]
     fn unquoted_symbol_symbol_and_letters() {
         let result = parser(unquoted_symbol)
-            .parse("US$")
-            .map(|x| x.0);
+            .parse("US$").map(|x| x.0);
         assert_eq!(result, Ok(Symbol::new("US$", QuoteOption::Unquoted)));
     }
 
     #[test]
     fn unquoted_symbol_just_letters() {
         let result = parser(unquoted_symbol)
-            .parse("AAPL")
-            .map(|x| x.0);
+            .parse("AAPL").map(|x| x.0);
         assert_eq!(result, Ok(Symbol::new("AAPL", QuoteOption::Unquoted)));
     }
 
     #[test]
     fn symbol_unquoted_test() {
         let result = parser(symbol)
-            .parse("$")
-            .map(|x| x.0);
+            .parse("$").map(|x| x.0);
         assert_eq!(result, Ok(Symbol::new("$", QuoteOption::Unquoted)));
     }
 
     #[test]
     fn symbol_quoted_test() {
         let result = parser(symbol)
-            .parse("\"MUTF2351\"")
-            .map(|x| x.0);
+            .parse("\"MUTF2351\"").map(|x| x.0);
         assert_eq!(result, Ok(Symbol::new("MUTF2351", QuoteOption::Quoted)));
     }
 
     #[test]
     fn amount_symbol_then_quantity_no_whitespace() {
         let result = parser(amount_symbol_then_quantity)
-            .parse("$13,245.00")
-            .map(|x| x.0);
+            .parse("$13,245.00").map(|x| x.0);
         assert_eq!(result, Ok(Amount::new(
             d128!(13245.00),
             Symbol::new("$", QuoteOption::Unquoted),
-            AmountRenderOptions::new(
-                SymbolPosition::Left,
-                Spacing::NoSpace
-            )
-        )));
+            AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))));
     }
 
     #[test]
     fn amount_symbol_then_quantity_with_whitespace() {
         let result = parser(amount_symbol_then_quantity)
-            .parse("$ 13,245.00")
-            .map(|x| x.0);
+            .parse("$ 13,245.00").map(|x| x.0);
         assert_eq!(result, Ok(Amount::new(
             d128!(13245.00),
             Symbol::new("$", QuoteOption::Unquoted),
-            AmountRenderOptions::new(
-                SymbolPosition::Left,
-                Spacing::Space
-            ),
-        )));
+            AmountRenderOptions::new(SymbolPosition::Left, Spacing::Space))));
     }
 
     #[test]
     fn amount_quantity_then_symbol_no_whitespace() {
         let result = parser(amount_quantity_then_symbol)
-            .parse("13,245.463AAPL")
-            .map(|x| x.0);
+            .parse("13,245.463AAPL").map(|x| x.0);
         assert_eq!(result, Ok(Amount::new(
             d128!(13245.463),
             Symbol::new("AAPL", QuoteOption::Unquoted),
-            AmountRenderOptions::new(
-                SymbolPosition::Right,
-                Spacing::NoSpace
-            )
-        )));
+            AmountRenderOptions::new(SymbolPosition::Right, Spacing::NoSpace))));
     }
 
     #[test]
     fn amount_quantity_then_symbol_with_whitespace() {
         let result = parser(amount_quantity_then_symbol)
-            .parse("13,245.463 \"MUTF2351\"")
-            .map(|x| x.0);
+            .parse("13,245.463 \"MUTF2351\"").map(|x| x.0);
         assert_eq!(result, Ok(Amount::new(
             d128!(13245.463),
             Symbol::new("MUTF2351", QuoteOption::Quoted),
-            AmountRenderOptions::new(
-                SymbolPosition::Right,
-                Spacing::Space
-            )
-        )));
+            AmountRenderOptions::new(SymbolPosition::Right, Spacing::Space))));
     }
 
     #[test]
     fn amount_test_symbol_then_quantity() {
         let result = parser(amount)
-            .parse("$13,245.46")
-            .map(|x| x.0);
+            .parse("$13,245.46").map(|x| x.0);
         assert_eq!(result, Ok(Amount::new(
             d128!(13245.46),
             Symbol::new("$", QuoteOption::Unquoted),
-            AmountRenderOptions::new(
-                SymbolPosition::Left,
-                Spacing::NoSpace
-            )
-        )));
+            AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))));
     }
 
     #[test]
     fn amount_test_quantity_then_symbol() {
         let result = parser(amount)
-            .parse("13,245.463 \"MUTF2351\"")
-            .map(|x| x.0);
+            .parse("13,245.463 \"MUTF2351\"").map(|x| x.0);
         assert_eq!(result, Ok(Amount::new(
             d128!(13245.463),
             Symbol::new("MUTF2351", QuoteOption::Quoted),
-            AmountRenderOptions::new(
-                SymbolPosition::Right,
-                Spacing::Space
-            )
-        )));
+            AmountRenderOptions::new(SymbolPosition::Right, Spacing::Space))));
     }
 
     #[test]
     fn price_test() {
         let result = parser(price)
-            .parse("P 2015-10-25 \"MUTF2351\" $5.42")
-            .map(|x| x.0);
+            .parse("P 2015-10-25 \"MUTF2351\" $5.42").map(|x| x.0);
         assert_eq!(result, Ok(Price::new(
             Local.ymd(2015, 10, 25),
             Symbol::new("MUTF2351", QuoteOption::Quoted),
             Amount::new(
                 d128!(5.42),
                 Symbol::new("$", QuoteOption::Unquoted),
-                AmountRenderOptions::new(
-                    SymbolPosition::Left,
-                    Spacing::NoSpace
-                )
-            )
-        )));
+                AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)))));
     }
 
     #[test]
     fn price_db_no_records() {
         let result = parser(price_db)
-            .parse("")
-            .map(|x| x.0);
+            .parse("").map(|x| x.0);
         assert_eq!(result, Ok(vec![]));
     }
 
     #[test]
     fn price_db_one_record() {
         let result = parser(price_db)
-            .parse("P 2015-10-25 \"MUTF2351\" $5.42")
-            .map(|x| x.0);
+            .parse("P 2015-10-25 \"MUTF2351\" $5.42").map(|x| x.0);
         assert_eq!(result, Ok(vec![
             Price::new(
                 Local.ymd(2015, 10, 25),
@@ -495,12 +429,7 @@ mod tests {
                 Amount::new(
                     d128!(5.42),
                     Symbol::new("$", QuoteOption::Unquoted),
-                    AmountRenderOptions::new(
-                        SymbolPosition::Left,
-                        Spacing::NoSpace
-                    )
-                )
-            )
+                    AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)))
         ]));
     }
 
@@ -511,8 +440,7 @@ mod tests {
                 P 2015-10-23 \"MUTF2351\" $5.42\n\
                 P 2015-10-25 \"MUTF2351\" $5.98\n\
                 P 2015-10-25 AAPL $313.38\n\
-            ")
-            .map(|x| x.0);
+            ").map(|x| x.0);
         assert_eq!(result, Ok(vec![
             Price::new(
                 Local.ymd(2015, 10, 23),
@@ -520,36 +448,21 @@ mod tests {
                 Amount::new(
                     d128!(5.42),
                     Symbol::new("$", QuoteOption::Unquoted),
-                    AmountRenderOptions::new(
-                        SymbolPosition::Left,
-                        Spacing::NoSpace
-                    )
-                )
-            ),
+                    AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
             Price::new(
                 Local.ymd(2015, 10, 25),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
                 Amount::new(
                     d128!(5.98),
                     Symbol::new("$", QuoteOption::Unquoted),
-                    AmountRenderOptions::new(
-                        SymbolPosition::Left,
-                        Spacing::NoSpace
-                    )
-                )
-            ),
+                    AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
             Price::new(
                 Local.ymd(2015, 10, 25),
                 Symbol::new("AAPL", QuoteOption::Unquoted),
                 Amount::new(
                     d128!(313.38),
                     Symbol::new("$", QuoteOption::Unquoted),
-                    AmountRenderOptions::new(
-                        SymbolPosition::Left,
-                        Spacing::NoSpace
-                    )
-                )
-            )
+                    AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)))
         ]));
     }
 

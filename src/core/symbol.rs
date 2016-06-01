@@ -4,13 +4,13 @@ use std::fmt;
 #[derive(PartialEq, Debug)]
 pub enum QuoteOption {
     Quoted,
-    Unquoted
+    Unquoted,
 }
 
 #[derive(PartialEq, Debug)]
 pub struct Symbol {
     value: String,
-    quote_option: QuoteOption
+    quote_option: QuoteOption,
 }
 
 impl Symbol {
@@ -18,7 +18,7 @@ impl Symbol {
     where S: Into<String> {
         Symbol {
             value: symbol.into(),
-            quote_option: quote_option
+            quote_option: quote_option,
         }
     }
 }
@@ -39,15 +39,13 @@ mod tests {
 
     #[test]
     fn symbol_fmt_quoted() {
-        let result =
-            format!("{}", Symbol::new("MUTF2351", QuoteOption::Quoted));
+        let result = format!("{}", Symbol::new("MUTF2351", QuoteOption::Quoted));
         assert_eq!(result, "\"MUTF2351\"");
     }
 
     #[test]
     fn symbol_fmt_unquoted() {
-        let result =
-            format!("{}", Symbol::new("$", QuoteOption::Unquoted));
+        let result = format!("{}", Symbol::new("$", QuoteOption::Unquoted));
         assert_eq!(result, "$");
     }
 }
