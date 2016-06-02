@@ -12,6 +12,7 @@ use std::io::Read;
 use core::commodity::*;
 use core::price::*;
 use core::symbol::*;
+use core::transaction::*;
 
 
 
@@ -169,13 +170,12 @@ where I: Stream<Item=char> {
 }
 
 /// Parses transaction status token. e.g. * (cleared) or ! (uncleared)
-// fn status<I>(input: State<I>) -> ParseResult<TransactionStatus, I>
-// where I: Stream<Item=char> {
-//     char('*')
-//         .map(|_| TransactionStatus::Cleared)
-//         .or(char('!').map(|_| TransactionStatus::Uncleared))
-//         .parse_state(input)
-// }
+fn status<I>(input: State<I>) -> ParseResult<Status, I>
+where I: Stream<Item=char> {
+    char('*').map(|_| Status::Cleared)
+        .or(char('!').map(|_| Status::Uncleared))
+        .parse_state(input)
+}
 
 
 
@@ -199,8 +199,8 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 
 #[cfg(test)]
 mod tests {
-    use super::{commodity, commodity_amount_then_symbol, commodity_symbol_then_amount, date,
-        line_ending, price, price_db, amount, quoted_symbol, symbol, two_digits,
+    use super::{amount, commodity, commodity_amount_then_symbol, commodity_symbol_then_amount,
+        date, line_ending, price, price_db, quoted_symbol, status, symbol, two_digits,
         two_digits_to_u32, unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
@@ -209,6 +209,7 @@ mod tests {
     use core::commodity::*;
     use core::price::*;
     use core::symbol::*;
+    use core::transaction::*;
 
     // HELPERS
 
@@ -473,6 +474,20 @@ mod tests {
                     Symbol::new("$", QuoteOption::Unquoted),
                     RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)))
         ]));
+    }
+
+    #[test]
+    fn status_cleared() {
+        let result = parser(status)
+            .parse("*").map(|x| x.0);
+        assert_eq!(result, Ok(Status::Cleared));
+    }
+
+    #[test]
+    fn status_uncleared() {
+        let result = parser(status)
+            .parse("!").map(|x| x.0);
+        assert_eq!(result, Ok(Status::Uncleared));
     }
 
 }
