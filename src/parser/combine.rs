@@ -9,7 +9,7 @@ use combine::primitives::{State, Stream};
 use decimal::d128;
 use std::fs::File;
 use std::io::Read;
-use core::amount::*;
+use core::commodity::*;
 use core::price::*;
 use core::symbol::*;
 
@@ -64,8 +64,8 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
-/// Parses a numeric quantity
-fn quantity<I>(input: State<I>) -> ParseResult<d128,I>
+/// Parses an amount
+fn amount<I>(input: State<I>) -> ParseResult<d128,I>
 where I: Stream<Item=char> {
     (
         optional(char('-')).map(|x| {
@@ -110,41 +110,41 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
-/// Parses an amount in the format of symbol then quantity.
-fn amount_symbol_then_quantity<I>(input: State<I>) -> ParseResult<Amount, I>
+/// Parses a commodity in the format of symbol then amount.
+fn commodity_symbol_then_amount<I>(input: State<I>) -> ParseResult<Commodity, I>
 where I: Stream<Item=char> {
-    (parser(symbol), optional(parser(whitespace)), parser(quantity))
-        .map(|(symbol, opt_whitespace, quantity)| {
+    (parser(symbol), optional(parser(whitespace)), parser(amount))
+        .map(|(symbol, opt_whitespace, amount)| {
             let spacing = match opt_whitespace {
                 Some(_) => Spacing::Space,
                 None => Spacing::NoSpace,
             };
-            let render_opts = AmountRenderOptions::new(SymbolPosition::Left, spacing);
-            Amount::new(quantity, symbol, render_opts)
+            let render_opts = RenderOptions::new(SymbolPosition::Left, spacing);
+            Commodity::new(amount, symbol, render_opts)
         })
         .parse_state(input)
 }
 
-/// Parses an amount in the format of quantity then symbol.
-fn amount_quantity_then_symbol<I>(input: State<I>) -> ParseResult<Amount, I>
+/// Parses a commodity in the format of amount then symbol.
+fn commodity_amount_then_symbol<I>(input: State<I>) -> ParseResult<Commodity, I>
 where I: Stream<Item=char> {
-    (parser(quantity), optional(parser(whitespace)), parser(symbol))
-        .map(|(quantity, opt_whitespace, symbol)| {
+    (parser(amount), optional(parser(whitespace)), parser(symbol))
+        .map(|(amount, opt_whitespace, symbol)| {
             let spacing = match opt_whitespace {
                 Some(_) => Spacing::Space,
                 None => Spacing::NoSpace,
             };
-            let render_opts = AmountRenderOptions::new(SymbolPosition::Right, spacing);
-            Amount::new(quantity, symbol, render_opts)
+            let render_opts = RenderOptions::new(SymbolPosition::Right, spacing);
+            Commodity::new(amount, symbol, render_opts)
         })
         .parse_state(input)
 }
 
-/// Parses an amount
-fn amount<I>(input: State<I>) -> ParseResult<Amount, I>
+/// Parses a commodity
+fn commodity<I>(input: State<I>) -> ParseResult<Commodity, I>
 where I: Stream<Item=char> {
-    parser(amount_symbol_then_quantity)
-        .or(parser(amount_quantity_then_symbol))
+    parser(commodity_symbol_then_amount)
+        .or(parser(commodity_amount_then_symbol))
         .parse_state(input)
 }
 
@@ -155,9 +155,9 @@ where I: Stream<Item=char> {
         char('P').skip(parser(whitespace)),
         parser(date).skip(parser(whitespace)),
         parser(symbol).skip(parser(whitespace)),
-        parser(amount)
+        parser(commodity)
     )
-        .map(|(_, date, symbol, amount)| Price::new(date, symbol, amount))
+        .map(|(_, date, symbol, commodity)| Price::new(date, symbol, commodity))
         .parse_state(input)
 }
 
@@ -167,6 +167,16 @@ where I: Stream<Item=char> {
     sep_end_by(parser(price), parser(line_ending))
         .parse_state(input)
 }
+
+/// Parses transaction status token. e.g. * (cleared) or ! (uncleared)
+// fn status<I>(input: State<I>) -> ParseResult<TransactionStatus, I>
+// where I: Stream<Item=char> {
+//     char('*')
+//         .map(|_| TransactionStatus::Cleared)
+//         .or(char('!').map(|_| TransactionStatus::Uncleared))
+//         .parse_state(input)
+// }
+
 
 
 // FILES
@@ -189,14 +199,14 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 
 #[cfg(test)]
 mod tests {
-    use super::{amount, amount_quantity_then_symbol, amount_symbol_then_quantity, date,
-        line_ending, price, price_db, quantity, quoted_symbol, symbol, two_digits,
+    use super::{commodity, commodity_amount_then_symbol, commodity_symbol_then_amount, date,
+        line_ending, price, price_db, amount, quoted_symbol, symbol, two_digits,
         two_digits_to_u32, unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
     use combine::{Parser};
-    use core::amount::*;
+    use core::commodity::*;
     use core::price::*;
     use core::symbol::*;
 
@@ -264,33 +274,33 @@ mod tests {
     }
 
     #[test]
-    fn quantity_negative_no_fractional_part()
+    fn amount_negative_no_fractional_part()
     {
-        let result = parser(quantity)
+        let result = parser(amount)
             .parse("-1110").map(|x| x.0);
         assert_eq!(result, Ok(d128!(-1110)));
     }
 
     #[test]
-    fn quantity_positive_no_fractional_part()
+    fn amount_positive_no_fractional_part()
     {
-        let result = parser(quantity)
+        let result = parser(amount)
             .parse("2,314").map(|x| x.0);
         assert_eq!(result, Ok(d128!(2314)));
     }
 
     #[test]
-    fn quantity_negative_with_fractional_part()
+    fn amount_negative_with_fractional_part()
     {
-        let result = parser(quantity)
+        let result = parser(amount)
             .parse("-1,110.38").map(|x| x.0);
         assert_eq!(result, Ok(d128!(-1110.38)));
     }
 
     #[test]
-    fn quantity_positive_with_fractional_part()
+    fn amount_positive_with_fractional_part()
     {
-        let result = parser(quantity)
+        let result = parser(amount)
             .parse("24521.793").map(|x| x.0);
         assert_eq!(result, Ok(d128!(24521.793)));
     }
@@ -338,63 +348,63 @@ mod tests {
     }
 
     #[test]
-    fn amount_symbol_then_quantity_no_whitespace() {
-        let result = parser(amount_symbol_then_quantity)
+    fn commodity_symbol_then_amount_no_whitespace() {
+        let result = parser(commodity_symbol_then_amount)
             .parse("$13,245.00").map(|x| x.0);
-        assert_eq!(result, Ok(Amount::new(
+        assert_eq!(result, Ok(Commodity::new(
             d128!(13245.00),
             Symbol::new("$", QuoteOption::Unquoted),
-            AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))));
+            RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))));
     }
 
     #[test]
-    fn amount_symbol_then_quantity_with_whitespace() {
-        let result = parser(amount_symbol_then_quantity)
+    fn commodity_symbol_then_amount_with_whitespace() {
+        let result = parser(commodity_symbol_then_amount)
             .parse("$ 13,245.00").map(|x| x.0);
-        assert_eq!(result, Ok(Amount::new(
+        assert_eq!(result, Ok(Commodity::new(
             d128!(13245.00),
             Symbol::new("$", QuoteOption::Unquoted),
-            AmountRenderOptions::new(SymbolPosition::Left, Spacing::Space))));
+            RenderOptions::new(SymbolPosition::Left, Spacing::Space))));
     }
 
     #[test]
-    fn amount_quantity_then_symbol_no_whitespace() {
-        let result = parser(amount_quantity_then_symbol)
+    fn commodity_amount_then_symbol_no_whitespace() {
+        let result = parser(commodity_amount_then_symbol)
             .parse("13,245.463AAPL").map(|x| x.0);
-        assert_eq!(result, Ok(Amount::new(
+        assert_eq!(result, Ok(Commodity::new(
             d128!(13245.463),
             Symbol::new("AAPL", QuoteOption::Unquoted),
-            AmountRenderOptions::new(SymbolPosition::Right, Spacing::NoSpace))));
+            RenderOptions::new(SymbolPosition::Right, Spacing::NoSpace))));
     }
 
     #[test]
-    fn amount_quantity_then_symbol_with_whitespace() {
-        let result = parser(amount_quantity_then_symbol)
+    fn commodity_amount_then_symbol_with_whitespace() {
+        let result = parser(commodity_amount_then_symbol)
             .parse("13,245.463 \"MUTF2351\"").map(|x| x.0);
-        assert_eq!(result, Ok(Amount::new(
+        assert_eq!(result, Ok(Commodity::new(
             d128!(13245.463),
             Symbol::new("MUTF2351", QuoteOption::Quoted),
-            AmountRenderOptions::new(SymbolPosition::Right, Spacing::Space))));
+            RenderOptions::new(SymbolPosition::Right, Spacing::Space))));
     }
 
     #[test]
-    fn amount_test_symbol_then_quantity() {
-        let result = parser(amount)
+    fn commodity_test_symbol_then_amount() {
+        let result = parser(commodity)
             .parse("$13,245.46").map(|x| x.0);
-        assert_eq!(result, Ok(Amount::new(
+        assert_eq!(result, Ok(Commodity::new(
             d128!(13245.46),
             Symbol::new("$", QuoteOption::Unquoted),
-            AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))));
+            RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))));
     }
 
     #[test]
-    fn amount_test_quantity_then_symbol() {
-        let result = parser(amount)
+    fn commodity_test_amount_then_symbol() {
+        let result = parser(commodity)
             .parse("13,245.463 \"MUTF2351\"").map(|x| x.0);
-        assert_eq!(result, Ok(Amount::new(
+        assert_eq!(result, Ok(Commodity::new(
             d128!(13245.463),
             Symbol::new("MUTF2351", QuoteOption::Quoted),
-            AmountRenderOptions::new(SymbolPosition::Right, Spacing::Space))));
+            RenderOptions::new(SymbolPosition::Right, Spacing::Space))));
     }
 
     #[test]
@@ -404,10 +414,10 @@ mod tests {
         assert_eq!(result, Ok(Price::new(
             Local.ymd(2015, 10, 25),
             Symbol::new("MUTF2351", QuoteOption::Quoted),
-            Amount::new(
+            Commodity::new(
                 d128!(5.42),
                 Symbol::new("$", QuoteOption::Unquoted),
-                AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)))));
+                RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)))));
     }
 
     #[test]
@@ -425,10 +435,10 @@ mod tests {
             Price::new(
                 Local.ymd(2015, 10, 25),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
-                Amount::new(
+                Commodity::new(
                     d128!(5.42),
                     Symbol::new("$", QuoteOption::Unquoted),
-                    AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)))
+                    RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)))
         ]));
     }
 
@@ -444,24 +454,24 @@ mod tests {
             Price::new(
                 Local.ymd(2015, 10, 23),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
-                Amount::new(
+                Commodity::new(
                     d128!(5.42),
                     Symbol::new("$", QuoteOption::Unquoted),
-                    AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
+                    RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
             Price::new(
                 Local.ymd(2015, 10, 25),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
-                Amount::new(
+                Commodity::new(
                     d128!(5.98),
                     Symbol::new("$", QuoteOption::Unquoted),
-                    AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
+                    RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
             Price::new(
                 Local.ymd(2015, 10, 25),
                 Symbol::new("AAPL", QuoteOption::Unquoted),
-                Amount::new(
+                Commodity::new(
                     d128!(313.38),
                     Symbol::new("$", QuoteOption::Unquoted),
-                    AmountRenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)))
+                    RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)))
         ]));
     }
 

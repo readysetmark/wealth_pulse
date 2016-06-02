@@ -28,6 +28,15 @@ Run tests via Cargo:
 ```
 
 
+Terminology
+-----------
+
+Temporary section until I build this stuff out:
+    Transaction Header (Transaction)
+    Posting (Transaction entry line)
+    Commodity (has an amount and symbol)
+
+
 Project Plan
 ------------
 
