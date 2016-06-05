@@ -184,6 +184,13 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
+/// Parses a payee.
+fn payee<I>(input: State<I>) -> ParseResult<String,I>
+where I: Stream<Item=char> {
+    many1(satisfy(|c| c != ';' && c != '\n' && c != '\r'))
+        .parse_state(input)
+}
+
 
 // FILES
 
@@ -206,8 +213,8 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 #[cfg(test)]
 mod tests {
     use super::{amount, code, commodity, commodity_amount_then_symbol,
-        commodity_symbol_then_amount, date, line_ending, price, price_db, quoted_symbol, status,
-        symbol, two_digits, two_digits_to_u32, unquoted_symbol, whitespace};
+        commodity_symbol_then_amount, date, line_ending, payee, price, price_db, quoted_symbol,
+        status, symbol, two_digits, two_digits_to_u32, unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
@@ -515,6 +522,35 @@ mod tests {
         let result = parser(code)
             .parse("(conf# abc-123-DEF)").map(|x| x.0);
         assert_eq!(result, Ok("conf# abc-123-DEF".to_string()));
+    }
+
+    #[test]
+    fn payee_empty_payee_is_error() {
+        let result = parser(payee)
+            .parse("").map(|x| x.0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn payee_single_character() {
+        let result = parser(payee)
+            .parse("Z").map(|x| x.0);
+        assert_eq!(result, Ok("Z".to_string()));
+    }
+
+    #[test]
+    fn payee_short() {
+        let result = parser(payee)
+            .parse("WonderMart").map(|x| x.0);
+        assert_eq!(result, Ok("WonderMart".to_string()));
+    }
+
+    #[test]
+    fn payee_long() {
+        let result = parser(payee)
+            .parse("WonderMart - groceries, kitchen supplies (pot), light bulbs").map(|x| x.0);
+        assert_eq!(result,
+            Ok("WonderMart - groceries, kitchen supplies (pot), light bulbs".to_string()));
     }
 
 }
