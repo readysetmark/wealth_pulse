@@ -198,6 +198,21 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
+/// Parses a transaction header.
+fn header<I>(input: State<I>) -> ParseResult<Header,I>
+where I: Stream<Item=char> {
+    (
+        parser(date).skip(parser(whitespace)),
+        parser(status).skip(parser(whitespace)),
+        optional(parser(code).skip(parser(whitespace))),
+        parser(payee),
+        optional(parser(comment))
+    )
+        .map(|(date, status, code, payee, comment)|
+            Header::new(date, status, code, payee, comment))
+        .parse_state(input)
+}
+
 
 // FILES
 
@@ -220,8 +235,8 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 #[cfg(test)]
 mod tests {
     use super::{amount, code, comment, commodity, commodity_amount_then_symbol,
-        commodity_symbol_then_amount, date, line_ending, payee, price, price_db, quoted_symbol,
-        status, symbol, two_digits, two_digits_to_u32, unquoted_symbol, whitespace};
+        commodity_symbol_then_amount, date, header, line_ending, payee, price, price_db,
+        quoted_symbol, status, symbol, two_digits, two_digits_to_u32, unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
@@ -579,6 +594,54 @@ mod tests {
         let result = parser(comment)
             .parse("; Comment").map(|x| x.0);
         assert_eq!(result, Ok(" Comment".to_string()));
+    }
+
+    #[test]
+    fn header_full() {
+        let result = parser(header)
+            .parse("2015-10-20 * (conf# abc-123) Payee ;Comment").map(|x| x.0);
+        assert_eq!(result, Ok(Header::new(
+            Local.ymd(2015, 10, 20),
+            Status::Cleared,
+            Some("conf# abc-123".to_string()),
+            "Payee ".to_string(),
+            Some("Comment".to_string()))));
+    }
+
+    #[test]
+    fn header_with_code_and_no_comment() {
+        let result = parser(header)
+            .parse("2015-10-20 ! (conf# abc-123) Payee").map(|x| x.0);
+        assert_eq!(result, Ok(Header::new(
+            Local.ymd(2015, 10, 20),
+            Status::Uncleared,
+            Some("conf# abc-123".to_string()),
+            "Payee".to_string(),
+            None)));
+    }
+
+    #[test]
+    fn header_with_comment_and_no_code() {
+        let result = parser(header)
+            .parse("2015-10-20 * Payee ;Comment").map(|x| x.0);
+        assert_eq!(result, Ok(Header::new(
+            Local.ymd(2015, 10, 20),
+            Status::Cleared,
+            None,
+            "Payee ".to_string(),
+            Some("Comment".to_string()))));
+    }
+
+    #[test]
+    fn header_with_no_code_or_comment() {
+        let result = parser(header)
+            .parse("2015-10-20 * Payee").map(|x| x.0);
+        assert_eq!(result, Ok(Header::new(
+            Local.ymd(2015, 10, 20),
+            Status::Cleared,
+            None,
+            "Payee".to_string(),
+            None)));
     }
 
 }
