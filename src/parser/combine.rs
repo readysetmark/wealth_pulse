@@ -191,6 +191,13 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
+/// Parses a comment.
+fn comment<I>(input: State<I>) -> ParseResult<String,I>
+where I: Stream<Item=char> {
+    char(';').with(many(satisfy(|c| c != '\r' && c != '\n')))
+        .parse_state(input)
+}
+
 
 // FILES
 
@@ -212,7 +219,7 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 
 #[cfg(test)]
 mod tests {
-    use super::{amount, code, commodity, commodity_amount_then_symbol,
+    use super::{amount, code, comment, commodity, commodity_amount_then_symbol,
         commodity_symbol_then_amount, date, line_ending, payee, price, price_db, quoted_symbol,
         status, symbol, two_digits, two_digits_to_u32, unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
@@ -551,6 +558,27 @@ mod tests {
             .parse("WonderMart - groceries, kitchen supplies (pot), light bulbs").map(|x| x.0);
         assert_eq!(result,
             Ok("WonderMart - groceries, kitchen supplies (pot), light bulbs".to_string()));
+    }
+    
+    #[test]
+    fn comment_empty() {
+        let result = parser(comment)
+            .parse(";").map(|x| x.0);
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn comment_no_leading_space() {
+        let result = parser(comment)
+            .parse(";Comment").map(|x| x.0);
+        assert_eq!(result, Ok("Comment".to_string()));
+    }
+
+    #[test]
+    fn comment_with_leading_space() {
+        let result = parser(comment)
+            .parse("; Comment").map(|x| x.0);
+        assert_eq!(result, Ok(" Comment".to_string()));
     }
 
 }
