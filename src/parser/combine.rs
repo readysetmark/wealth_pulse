@@ -2,8 +2,8 @@ use rust_core::str::FromStr;
 use chrono::date::Date;
 use chrono::offset::local::Local;
 use chrono::offset::TimeZone;
-use combine::{char, crlf, digit, many, many1, newline, optional, parser, satisfy, sep_end_by,
-    Parser, ParserExt, ParseResult};
+use combine::{between, char, crlf, digit, many, many1, newline, optional, parser, satisfy,
+    sep_end_by, Parser, ParserExt, ParseResult};
 use combine::combinator::FnParser;
 use combine::primitives::{State, Stream};
 use decimal::d128;
@@ -177,6 +177,12 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
+/// Parses transaction code. e.g. (cheque #802)
+fn code<I>(input: State<I>) -> ParseResult<String, I>
+where I: Stream<Item=char> {
+    between(char('('), char(')'), many(satisfy(|c| c != '\r' && c != '\n' && c != ')')))
+        .parse_state(input)
+}
 
 
 // FILES
@@ -199,9 +205,9 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 
 #[cfg(test)]
 mod tests {
-    use super::{amount, commodity, commodity_amount_then_symbol, commodity_symbol_then_amount,
-        date, line_ending, price, price_db, quoted_symbol, status, symbol, two_digits,
-        two_digits_to_u32, unquoted_symbol, whitespace};
+    use super::{amount, code, commodity, commodity_amount_then_symbol,
+        commodity_symbol_then_amount, date, line_ending, price, price_db, quoted_symbol, status,
+        symbol, two_digits, two_digits_to_u32, unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
@@ -488,6 +494,27 @@ mod tests {
         let result = parser(status)
             .parse("!").map(|x| x.0);
         assert_eq!(result, Ok(Status::Uncleared));
+    }
+
+    #[test]
+    fn code_empty() {
+        let result = parser(code)
+            .parse("()").map(|x| x.0);
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn code_short() {
+        let result = parser(code)
+            .parse("(89)").map(|x| x.0);
+        assert_eq!(result, Ok("89".to_string()));
+    }
+
+    #[test]
+    fn code_long() {
+        let result = parser(code)
+            .parse("(conf# abc-123-DEF)").map(|x| x.0);
+        assert_eq!(result, Ok("conf# abc-123-DEF".to_string()));
     }
 
 }
