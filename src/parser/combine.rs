@@ -3,7 +3,7 @@ use chrono::date::Date;
 use chrono::offset::local::Local;
 use chrono::offset::TimeZone;
 use combine::{alpha_num, between, char, crlf, digit, many, many1, newline, optional, parser,
-    satisfy, sep_end_by, Parser, ParserExt, ParseResult};
+    satisfy, sep_by1, sep_end_by, Parser, ParserExt, ParseResult};
 use combine::combinator::FnParser;
 use combine::primitives::{State, Stream};
 use decimal::d128;
@@ -220,6 +220,13 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
+/// Parses an account, made up of sub-accounts separated by colons.
+fn account<I>(input: State<I>) -> ParseResult<Vec<String>,I>
+where I: Stream<Item=char> {
+    sep_by1(parser(sub_account), char(':'))
+        .parse_state(input)
+}
+
 
 
 // FILES
@@ -242,7 +249,7 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 
 #[cfg(test)]
 mod tests {
-    use super::{amount, code, comment, commodity, commodity_amount_then_symbol,
+    use super::{account, amount, code, comment, commodity, commodity_amount_then_symbol,
         commodity_symbol_then_amount, date, header, line_ending, payee, price, price_db,
         quoted_symbol, status, sub_account, symbol, two_digits, two_digits_to_u32, unquoted_symbol,
         whitespace};
@@ -665,6 +672,24 @@ mod tests {
         let result = parser(sub_account)
             .parse("123abcABC").map(|x| x.0);
         assert_eq!(result, Ok("123abcABC".to_string()));
+    }
+
+    #[test]
+    fn account_single_level() {
+        let result = parser(account)
+            .parse("Expenses").map(|x| x.0);
+        assert_eq!(result, Ok(vec!["Expenses".to_string()]));
+    }
+
+    #[test]
+    fn account_multiple_level() {
+        let result = parser(account)
+            .parse("Expenses:Food:Groceries").map(|x| x.0);
+        assert_eq!(result, Ok(vec![
+            "Expenses".to_string(),
+            "Food".to_string(),
+            "Groceries".to_string()
+        ]));
     }
 
 }
