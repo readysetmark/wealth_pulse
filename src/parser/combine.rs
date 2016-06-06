@@ -2,8 +2,8 @@ use rust_core::str::FromStr;
 use chrono::date::Date;
 use chrono::offset::local::Local;
 use chrono::offset::TimeZone;
-use combine::{between, char, crlf, digit, many, many1, newline, optional, parser, satisfy,
-    sep_end_by, Parser, ParserExt, ParseResult};
+use combine::{alpha_num, between, char, crlf, digit, many, many1, newline, optional, parser,
+    satisfy, sep_end_by, Parser, ParserExt, ParseResult};
 use combine::combinator::FnParser;
 use combine::primitives::{State, Stream};
 use decimal::d128;
@@ -213,6 +213,14 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
+/// Parses a sub-account name, which must be alphanumeric.
+fn sub_account<I>(input: State<I>) -> ParseResult<String,I>
+where I: Stream<Item=char> {
+    many1(alpha_num())
+        .parse_state(input)
+}
+
+
 
 // FILES
 
@@ -236,7 +244,8 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 mod tests {
     use super::{amount, code, comment, commodity, commodity_amount_then_symbol,
         commodity_symbol_then_amount, date, header, line_ending, payee, price, price_db,
-        quoted_symbol, status, symbol, two_digits, two_digits_to_u32, unquoted_symbol, whitespace};
+        quoted_symbol, status, sub_account, symbol, two_digits, two_digits_to_u32, unquoted_symbol,
+        whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
@@ -642,6 +651,20 @@ mod tests {
             None,
             "Payee".to_string(),
             None)));
+    }
+
+    #[test]
+    fn sub_account_alphanumeric() {
+        let result = parser(sub_account)
+            .parse("AZaz09").map(|x| x.0);
+        assert_eq!(result, Ok("AZaz09".to_string()));
+    }
+
+    #[test]
+    fn sub_account_can_start_with_digits() {
+        let result = parser(sub_account)
+            .parse("123abcABC").map(|x| x.0);
+        assert_eq!(result, Ok("123abcABC".to_string()));
     }
 
 }
