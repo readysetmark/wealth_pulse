@@ -13,6 +13,7 @@ use core::commodity::*;
 use core::price::*;
 use core::symbol::*;
 use core::transaction::*;
+use parser::types::*;
 
 
 
@@ -149,6 +150,21 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
+/// Parses a commodity or an inferred commodity
+fn commodity_or_inferred<I>(input: State<I>)
+-> ParseResult<(CommoditySource, Option<Commodity>), I>
+where I: Stream<Item=char> {
+    optional(parser(commodity))
+        .map(|opt_commodity| {
+            let source = match opt_commodity {
+                Some(_) => CommoditySource::Provided,
+                None => CommoditySource::Inferred
+            };
+            (source, opt_commodity)
+        })
+        .parse_state(input)
+}
+
 /// Parses a price entry
 fn price<I>(input: State<I>) -> ParseResult<Price, I>
 where I: Stream<Item=char> {
@@ -250,9 +266,9 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 #[cfg(test)]
 mod tests {
     use super::{account, amount, code, comment, commodity, commodity_amount_then_symbol,
-        commodity_symbol_then_amount, date, header, line_ending, payee, price, price_db,
-        quoted_symbol, status, sub_account, symbol, two_digits, two_digits_to_u32, unquoted_symbol,
-        whitespace};
+        commodity_or_inferred, commodity_symbol_then_amount, date, header, line_ending, payee,
+        price, price_db, quoted_symbol, status, sub_account, symbol, two_digits, two_digits_to_u32,
+        unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
@@ -261,6 +277,7 @@ mod tests {
     use core::price::*;
     use core::symbol::*;
     use core::transaction::*;
+    use parser::types::*;
 
     // HELPERS
 
@@ -457,6 +474,23 @@ mod tests {
             d128!(13245.463),
             Symbol::new("MUTF2351", QuoteOption::Quoted),
             RenderOptions::new(SymbolPosition::Right, Spacing::Space))));
+    }
+
+    #[test]
+    fn commodity_or_inferred_commodity_provided() {
+        let result = parser(commodity_or_inferred)
+            .parse("$13,245.46").map(|x| x.0);
+        assert_eq!(result, Ok((CommoditySource::Provided, Some(Commodity::new(
+            d128!(13245.46),
+            Symbol::new("$", QuoteOption::Unquoted),
+            RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))))));
+    }
+
+    #[test]
+    fn commodity_or_inferred_no_commodity() {
+        let result = parser(commodity_or_inferred)
+            .parse("").map(|x| x.0);
+        assert_eq!(result, Ok((CommoditySource::Inferred, None)));
     }
 
     #[test]
