@@ -243,6 +243,19 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
+/// Parses a transaction posting
+fn posting<I>(input: State<I>) -> ParseResult<RawPosting, I>
+where I: Stream<Item=char> {
+    (
+        parser(account).skip(optional(parser(whitespace))),
+        parser(commodity_or_inferred).skip(optional(parser(whitespace))),
+        optional(parser(comment))
+    )
+        .map(|(sub_accounts, (commodity_source, opt_commodity), opt_comment)|
+            RawPosting::new(sub_accounts, opt_commodity, commodity_source, opt_comment))
+        .parse_state(input)
+}
+
 
 
 // FILES
@@ -267,8 +280,8 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 mod tests {
     use super::{account, amount, code, comment, commodity, commodity_amount_then_symbol,
         commodity_or_inferred, commodity_symbol_then_amount, date, header, line_ending, payee,
-        price, price_db, quoted_symbol, status, sub_account, symbol, two_digits, two_digits_to_u32,
-        unquoted_symbol, whitespace};
+        posting, price, price_db, quoted_symbol, status, sub_account, symbol, two_digits,
+        two_digits_to_u32, unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
@@ -724,6 +737,85 @@ mod tests {
             "Food".to_string(),
             "Groceries".to_string()
         ]));
+    }
+
+    #[test]
+    fn posting_with_all_components() {
+        let result = parser(posting)
+            .parse("Assets:Savings\t$45.00\t;comment").map(|x| x.0);
+        assert_eq!(result, Ok(RawPosting::new(
+            vec![
+                "Assets".to_string(),
+                "Savings".to_string()
+            ],
+            Some(Commodity::new(
+                d128!(45.00),
+                Symbol::new("$".to_string(), QuoteOption::Unquoted),
+                RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
+            CommoditySource::Provided,
+            Some("comment".to_string()))));
+    }
+
+    #[test]
+    fn posting_with_all_components_alternate_commodity() {
+        let result = parser(posting)
+            .parse("Assets:Investments\t13.508 \"MUTF2351\"\t;comment").map(|x| x.0);
+        assert_eq!(result, Ok(RawPosting::new(
+            vec![
+                "Assets".to_string(),
+                "Investments".to_string()
+            ],
+            Some(Commodity::new(
+                d128!(13.508),
+                Symbol::new("MUTF2351".to_string(), QuoteOption::Quoted),
+                RenderOptions::new(SymbolPosition::Right, Spacing::Space))),
+            CommoditySource::Provided,
+            Some("comment".to_string()))));
+    }
+
+    #[test]
+    fn posting_with_commodity_no_comment() {
+        let result = parser(posting)
+            .parse("Assets:Savings\t$45.00").map(|x| x.0);
+        assert_eq!(result, Ok(RawPosting::new(
+            vec![
+                "Assets".to_string(),
+                "Savings".to_string()
+            ],
+            Some(Commodity::new(
+                d128!(45.00),
+                Symbol::new("$".to_string(), QuoteOption::Unquoted),
+                RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
+            CommoditySource::Provided,
+            None)));
+    }
+
+    #[test]
+    fn posting_inferred_commodity_with_comment() {
+        let result = parser(posting)
+            .parse("Assets:Savings\t;comment").map(|x| x.0);
+        assert_eq!(result, Ok(RawPosting::new(
+            vec![
+                "Assets".to_string(),
+                "Savings".to_string()
+            ],
+            None,
+            CommoditySource::Inferred,
+            Some("comment".to_string()))));
+    }
+
+    #[test]
+    fn posting_inferred_commodity_no_comment() {
+        let result = parser(posting)
+            .parse("Assets:Savings").map(|x| x.0);
+        assert_eq!(result, Ok(RawPosting::new(
+            vec![
+                "Assets".to_string(),
+                "Savings".to_string()
+            ],
+            None,
+            CommoditySource::Inferred,
+            None)));
     }
 
 }
