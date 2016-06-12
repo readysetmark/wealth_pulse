@@ -243,7 +243,7 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
-/// Parses a transaction posting
+/// Parses a transaction posting.
 fn posting<I>(input: State<I>) -> ParseResult<RawPosting, I>
 where I: Stream<Item=char> {
     (
@@ -254,6 +254,14 @@ where I: Stream<Item=char> {
         .map(|(sub_accounts, (commodity_source, opt_commodity), opt_comment)|
             RawPosting::new(sub_accounts, opt_commodity, commodity_source, opt_comment))
         .parse_state(input)
+}
+
+/// Parses a whole transaction.
+fn transaction<I>(input: State<I>) -> ParseResult<ParseTree::Transaction, I>
+where I: Stream<Item=char> {
+    (
+        parser(header).skip(parser(line_ending))
+    )
 }
 
 
@@ -280,8 +288,8 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 mod tests {
     use super::{account, amount, code, comment, commodity, commodity_amount_then_symbol,
         commodity_or_inferred, commodity_symbol_then_amount, date, header, line_ending, payee,
-        posting, price, price_db, quoted_symbol, status, sub_account, symbol, two_digits,
-        two_digits_to_u32, unquoted_symbol, whitespace};
+        posting, price, price_db, quoted_symbol, status, sub_account, symbol, transaction,
+        two_digits, two_digits_to_u32, unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
@@ -816,6 +824,46 @@ mod tests {
             None,
             CommoditySource::Inferred,
             None)));
+    }
+
+    #[test]
+    fn transaction_basic() {
+        let result = parser(transaction)
+            .parse("\
+                2016-06-07 * Basic transaction ;comment\n\
+                  Expenses:Groceries    $45.00\n\
+                  Liabilities:Credit\n\
+                \n\
+            ").map(|x| x.0);
+        assert_eq!(result, Ok(ParseTree::Transaction(
+            Header::new(
+                Local.ymd(2016, 6, 7),
+                Status::Cleared,
+                None,
+                "Basic transaction ".to_string(),
+                Some("comment".to_string())),
+            vec![
+                RawPosting::new(
+                    vec![
+                        "Expenses".to_string(),
+                        "Groceries".to_string(),
+                    ],
+                    Some(Commodity::new(
+                        d128!(45.00),
+                        Symbol::new("$".to_string(), QuoteOption::Unquoted),
+                        RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
+                    CommoditySource::Provided,
+                    None),
+                RawPosting::new(
+                    vec![
+                        "Liabilities".to_string(),
+                        "Credit".to_string(),
+                    ],
+                    None,
+                    CommoditySource::Inferred,
+                    None)
+            ]
+        )));
     }
 
 }

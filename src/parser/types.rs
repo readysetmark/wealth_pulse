@@ -1,9 +1,11 @@
 use core::commodity::*;
+use core::price::Price;
+use core::transaction::*;
 
 #[derive(PartialEq, Debug)]
 pub enum CommoditySource {
     Provided,
-    Inferred
+    Inferred,
 }
 
 #[derive(PartialEq, Debug)]
@@ -12,7 +14,7 @@ pub struct RawPosting {
     sub_accounts: Vec<String>,
     commodity: Option<Commodity>,
     commodity_source: CommoditySource,
-    comment: Option<String>
+    comment: Option<String>,
 }
 
 impl RawPosting {
@@ -26,4 +28,11 @@ impl RawPosting {
             comment: comment
         }
     }
+}
+
+#[derive(PartialEq, Debug)]
+pub enum ParseTree {
+    Price(Price),
+    Posting(RawPosting),
+    Transaction(Header, Vec<RawPosting>),
 }
