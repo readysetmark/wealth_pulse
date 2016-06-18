@@ -263,6 +263,13 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
+/// Parses a transaction posting line, which must begin with whitespace.
+fn posting_line<I>(input: State<I>) -> ParseResult<RawPosting, I>
+where I: Stream<Item=char> {
+    many1::<String, _>(parser(whitespace)).with(parser(posting)).skip(parser(line_ending))
+        .parse_state(input)
+}
+
 /// Parses a whole transaction.
 // fn transaction<I>(input: State<I>) -> ParseResult<ParseTree, I>
 // where I: Stream<Item=char> {
@@ -298,8 +305,8 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 mod tests {
     use super::{account, amount, code, comment, comment_line, commodity,
         commodity_amount_then_symbol, commodity_or_inferred, commodity_symbol_then_amount, date,
-        header, line_ending, payee, posting, price, price_db, quoted_symbol, status, sub_account,
-        symbol, two_digits, two_digits_to_u32, unquoted_symbol, whitespace};
+        header, line_ending, payee, posting, posting_line, price, price_db, quoted_symbol, status,
+        sub_account, symbol, two_digits, two_digits_to_u32, unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
@@ -840,6 +847,34 @@ mod tests {
     fn posting_inferred_commodity_no_comment() {
         let result = parser(posting)
             .parse("Assets:Savings").map(|x| x.0);
+        assert_eq!(result, Ok(RawPosting::new(
+            vec![
+                "Assets".to_string(),
+                "Savings".to_string()
+            ],
+            None,
+            CommoditySource::Inferred,
+            None)));
+    }
+
+    #[test]
+    fn posting_line_begins_with_spaces() {
+        let result = parser(posting_line)
+            .parse("  Assets:Savings\r\n").map(|x| x.0);
+        assert_eq!(result, Ok(RawPosting::new(
+            vec![
+                "Assets".to_string(),
+                "Savings".to_string()
+            ],
+            None,
+            CommoditySource::Inferred,
+            None)));
+    }
+
+    #[test]
+    fn posting_line_begins_with_tab() {
+        let result = parser(posting_line)
+            .parse("\tAssets:Savings\r\n").map(|x| x.0);
         assert_eq!(result, Ok(RawPosting::new(
             vec![
                 "Assets".to_string(),
