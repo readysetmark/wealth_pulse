@@ -3,7 +3,7 @@ use chrono::date::Date;
 use chrono::offset::local::Local;
 use chrono::offset::TimeZone;
 use combine::{alpha_num, between, char, crlf, digit, many, many1, newline, optional, parser,
-    satisfy, sep_by1, sep_end_by, try, Parser, ParserExt, ParseResult};
+    satisfy, sep_by1, sep_end_by, skip_many, try, Parser, ParserExt, ParseResult};
 use combine::combinator::FnParser;
 use combine::primitives::{State, Stream};
 use decimal::d128;
@@ -287,6 +287,20 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
+/// Parses an empty line, or line containing only whitespace.
+fn empty_line<I>(input: State<I>) -> ParseResult<(), I>
+where I: Stream<Item=char> {
+    skip_many(parser(whitespace)).skip(parser(line_ending))
+        .parse_state(input)
+}
+
+/// Parses a complete ledger, extracting transactions and prices.
+// fn ledger<I>(input: State<I>) -> ParseResult<ParseTree, I>
+// where I: Stream<Item=char> {
+//     // skip one or more comment or empty lines
+//     // parse transactions or prices separated by one or more comment or empty lines
+// }
+
 
 
 // FILES
@@ -311,9 +325,9 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 mod tests {
     use super::{account, amount, code, comment, comment_line, commodity,
         commodity_amount_then_symbol, commodity_or_inferred, commodity_symbol_then_amount, date,
-        header, line_ending, payee, posting, posting_line, price, price_db, quoted_symbol, status,
-        sub_account, symbol, transaction, two_digits, two_digits_to_u32, unquoted_symbol,
-        whitespace};
+        empty_line, header, line_ending, payee, posting, posting_line, price, price_db,
+        quoted_symbol, status, sub_account, symbol, transaction, two_digits, two_digits_to_u32,
+        unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
@@ -932,4 +946,17 @@ mod tests {
         )));
     }
 
+    #[test]
+    fn empty_line_with_whitespace() {
+        let result = parser(empty_line)
+            .parse("  \t \t \r\n").map(|x| x.0);
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn empty_line_no_whitespace() {
+        let result = parser(empty_line)
+            .parse("\r\n").map(|x| x.0);
+        assert_eq!(result, Ok(()));
+    }
 }
