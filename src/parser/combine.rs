@@ -270,6 +270,13 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
+/// Parses and discards an empty line, or line containing only whitespace.
+fn empty_line<I>(input: State<I>) -> ParseResult<(), I>
+where I: Stream<Item=char> {
+    skip_many(parser(whitespace)).skip(parser(line_ending))
+        .parse_state(input)
+}
+
 /// Parses a whole transaction.
 fn transaction<I>(input: State<I>) -> ParseResult<ParseTree, I>
 where I: Stream<Item=char> {
@@ -277,8 +284,6 @@ where I: Stream<Item=char> {
         parser(header).skip(parser(line_ending)),
         many1(try(parser(comment_line).map(|_| None))
                 .or(parser(posting_line).map(|p| Some(p))))
-            .skip(many::<String, _>(parser(whitespace)))
-            .skip(parser(line_ending))
     )
         .map(|(header, postings) : (Header, Vec<Option<RawPosting>>)| {
             let raw_postings = postings.into_iter().filter_map(|p| p).collect();
@@ -287,19 +292,27 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
-/// Parses an empty line, or line containing only whitespace.
-fn empty_line<I>(input: State<I>) -> ParseResult<(), I>
+/// Parses and discards any number of comment or empty line.
+fn skip_comment_or_empty_lines<I>(input: State<I>) -> ParseResult<(), I>
 where I: Stream<Item=char> {
-    skip_many(parser(whitespace)).skip(parser(line_ending))
+    skip_many(skip_many(parser(whitespace))
+            .skip(optional(parser(comment)))
+            .skip(parser(line_ending)))
         .parse_state(input)
 }
 
 /// Parses a complete ledger, extracting transactions and prices.
-// fn ledger<I>(input: State<I>) -> ParseResult<ParseTree, I>
-// where I: Stream<Item=char> {
-//     // skip one or more comment or empty lines
-//     // parse transactions or prices separated by one or more comment or empty lines
-// }
+fn ledger<I>(input: State<I>) -> ParseResult<Vec<ParseTree>, I>
+where I: Stream<Item=char> {
+    // skip one or more comment or empty lines
+    // parse transactions or prices separated, which may be separated bycomment or empty lines
+    parser(skip_comment_or_empty_lines)
+        .with(many(
+            parser(transaction)
+                .or(parser(price).map(|p| ParseTree::Price(p)))
+                .skip(parser(skip_comment_or_empty_lines))))
+        .parse_state(input)
+}
 
 
 
@@ -323,11 +336,11 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 
 #[cfg(test)]
 mod tests {
-    use super::{account, amount, code, comment, comment_line, commodity,
-        commodity_amount_then_symbol, commodity_or_inferred, commodity_symbol_then_amount, date,
-        empty_line, header, line_ending, payee, posting, posting_line, price, price_db,
-        quoted_symbol, status, sub_account, symbol, transaction, two_digits, two_digits_to_u32,
-        unquoted_symbol, whitespace};
+    use super::{account, amount, code, comment, comment_line, skip_comment_or_empty_lines,
+        commodity, commodity_amount_then_symbol, commodity_or_inferred,
+        commodity_symbol_then_amount, date, empty_line, header, ledger, line_ending, payee,
+        posting, posting_line, price, price_db, quoted_symbol, status, sub_account, symbol,
+        transaction, two_digits, two_digits_to_u32, unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
@@ -907,13 +920,26 @@ mod tests {
     }
 
     #[test]
+    fn empty_line_with_whitespace() {
+        let result = parser(empty_line)
+            .parse("  \t \t \r\n").map(|x| x.0);
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn empty_line_no_whitespace() {
+        let result = parser(empty_line)
+            .parse("\r\n").map(|x| x.0);
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
     fn transaction_basic() {
         let result = parser(transaction)
             .parse("\
                 2016-06-07 * Basic transaction ;comment\n\
                 \tExpenses:Groceries    $45.00\n\
                 \tLiabilities:Credit\n\
-                \n\
             ").map(|x| x.0);
         assert_eq!(result, Ok(ParseTree::Transaction(
             Header::new(
@@ -947,16 +973,116 @@ mod tests {
     }
 
     #[test]
-    fn empty_line_with_whitespace() {
-        let result = parser(empty_line)
-            .parse("  \t \t \r\n").map(|x| x.0);
+    fn transaction_with_comment() {
+        let result = parser(transaction)
+            .parse("\
+                2016-06-07 * Basic transaction ;comment\n\
+                ; a comment in a transaction
+                \tExpenses:Groceries    $45.00\n\
+                \tLiabilities:Credit\n\
+            ").map(|x| x.0);
+        assert_eq!(result, Ok(ParseTree::Transaction(
+            Header::new(
+                Local.ymd(2016, 6, 7),
+                Status::Cleared,
+                None,
+                "Basic transaction ".to_string(),
+                Some("comment".to_string())),
+            vec![
+                RawPosting::new(
+                    vec![
+                        "Expenses".to_string(),
+                        "Groceries".to_string(),
+                    ],
+                    Some(Commodity::new(
+                        d128!(45.00),
+                        Symbol::new("$".to_string(), QuoteOption::Unquoted),
+                        RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
+                    CommoditySource::Provided,
+                    None),
+                RawPosting::new(
+                    vec![
+                        "Liabilities".to_string(),
+                        "Credit".to_string(),
+                    ],
+                    None,
+                    CommoditySource::Inferred,
+                    None)
+            ]
+        )));
+    }
+
+    #[test]
+    fn skip_comment_or_empty_lines_comment() {
+        let result = parser(skip_comment_or_empty_lines)
+            .parse("; comment\r\n").map(|x| x.0);
         assert_eq!(result, Ok(()));
     }
 
     #[test]
-    fn empty_line_no_whitespace() {
-        let result = parser(empty_line)
-            .parse("\r\n").map(|x| x.0);
+    fn skip_comment_or_empty_lines_comments() {
+        let result = parser(skip_comment_or_empty_lines)
+            .parse("; comment\r\n; another comment\r\n").map(|x| x.0);
         assert_eq!(result, Ok(()));
     }
+
+    #[test]
+    fn skip_comment_or_empty_lines_empty_line() {
+        let result = parser(skip_comment_or_empty_lines)
+            .parse("  \r\n").map(|x| x.0);
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn skip_comment_or_empty_lines_empty_lines() {
+        let result = parser(skip_comment_or_empty_lines)
+            .parse("  \r\n\r\n\t\r\n").map(|x| x.0);
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn skip_comment_or_empty_lines_mix() {
+        let result = parser(skip_comment_or_empty_lines)
+            .parse("  \r\n; comment\r\n\t; indented comment\r\n\r\n").map(|x| x.0);
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn ledger_single_transaction() {
+        let result = parser(ledger)
+            .parse("; Preamble\n\
+                \n\
+                2016-06-07 * Basic transaction ;comment\n\
+                \tExpenses:Groceries    $45.00\n\
+                \tLiabilities:Credit\n\
+                \n\
+            ").map(|x| x.0);
+        println!("{:?}", result);
+        assert_eq!(result.is_ok(), true);
+        assert_eq!(result.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn ledger_small_sample() {
+        let result = parser(ledger)
+            .parse("; Preamble\n\
+                \n\
+                2016-06-07 * Basic transaction ;comment\n\
+                \tExpenses:Groceries    $45.00\n\
+                \tLiabilities:Credit\n\
+                \n\
+                P 2016-06-07 \"MUTF2351\" $4.56\n\
+                P 2016-06-07 AAPL $23.33\n\
+                \n\
+                ; Separator\n\
+                \n\
+                2016-06-07 * Basic transaction ;comment\n\
+                \tExpenses:Groceries    $45.00\n\
+                \tLiabilities:Credit\n\
+            ").map(|x| x.0);
+        println!("{:?}", result);
+        assert_eq!(result.is_ok(), true);
+        assert_eq!(result.unwrap().len(), 4);
+    }
+
 }

@@ -33,6 +33,5 @@ impl RawPosting {
 #[derive(PartialEq, Debug)]
 pub enum ParseTree {
     Price(Price),
-    Posting(RawPosting),
     Transaction(Header, Vec<RawPosting>),
 }
