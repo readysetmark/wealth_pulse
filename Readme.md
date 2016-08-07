@@ -41,7 +41,7 @@ Project Plan
 ------------
 
 Ledger
-* [ ] Parse ledger file
+* [x] Parse ledger file
 * [ ] Validate and transform
 
 Configuration
