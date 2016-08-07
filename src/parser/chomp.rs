@@ -185,7 +185,7 @@ fn price_line(i: Input<u8>) -> U8Result<Price> {
 
 // FILES
 
-pub fn pricedb_file(file_path: &str) -> Vec<Price> {
+pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
     println!("Using chomp");
     let file = File::open(file_path).ok().expect("Failed to open file");
     let mut source = Source::new(file);
@@ -210,7 +210,7 @@ pub fn pricedb_file(file_path: &str) -> Vec<Price> {
 mod tests {
     use super::{commodity, commodity_amount_then_symbol,
         commodity_symbol_then_amount, date, day, make_amount, month, price,
-        pricedb_file, price_line, amount, quoted_symbol, unquoted_symbol,
+        parse_pricedb, price_line, amount, quoted_symbol, unquoted_symbol,
         symbol, whitespace, year};
     use chomp::{parse_only};
     use chrono::offset::local::Local;
@@ -430,13 +430,13 @@ mod tests {
 
     #[test]
     fn pricedb_empty() {
-        let result = pricedb_file("./test/data/empty.pricedb");
+        let result = parse_pricedb("./test/data/empty.pricedb");
         assert_eq!(result, vec![]);
     }
 
     #[test]
     fn pricedb_single() {
-        let result = pricedb_file("./test/data/single.pricedb");
+        let result = parse_pricedb("./test/data/single.pricedb");
         assert_eq!(result, vec![
             Price::new(
                 Local.ymd(2016, 2, 7),
@@ -453,7 +453,7 @@ mod tests {
 
     #[test]
     fn pricedb_multiple() {
-        let result = pricedb_file("./test/data/multiple.pricedb");
+        let result = parse_pricedb("./test/data/multiple.pricedb");
         assert_eq!(result, vec![
             Price::new(
                 Local.ymd(2016, 2, 7),

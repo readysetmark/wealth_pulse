@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Mark Williams <mark@readysetmark.com>"]
 
 [dependencies]
-chomp = "0.2.4"
+chomp = "0.2.6"
 chrono = "0.2.0"
 combine = "1.3.0"
 decimal = "0.3.1"

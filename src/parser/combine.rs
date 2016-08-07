@@ -2,8 +2,8 @@ use rust_core::str::FromStr;
 use chrono::date::Date;
 use chrono::offset::local::Local;
 use chrono::offset::TimeZone;
-use combine::{char, crlf, digit, many, many1, newline, optional, parser, satisfy, sep_end_by,
-    Parser, ParserExt, ParseResult};
+use combine::{alpha_num, between, char, crlf, digit, many, many1, newline, optional, parser,
+    satisfy, sep_by1, sep_end_by, skip_many, try, Parser, ParserExt, ParseResult};
 use combine::combinator::FnParser;
 use combine::primitives::{State, Stream};
 use decimal::d128;
@@ -13,6 +13,7 @@ use core::commodity::*;
 use core::price::*;
 use core::symbol::*;
 use core::transaction::*;
+use parser::types::*;
 
 
 
@@ -149,6 +150,21 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
+/// Parses a commodity or an inferred commodity
+fn commodity_or_inferred<I>(input: State<I>)
+-> ParseResult<(CommoditySource, Option<Commodity>), I>
+where I: Stream<Item=char> {
+    optional(parser(commodity))
+        .map(|opt_commodity| {
+            let source = match opt_commodity {
+                Some(_) => CommoditySource::Provided,
+                None => CommoditySource::Inferred
+            };
+            (source, opt_commodity)
+        })
+        .parse_state(input)
+}
+
 /// Parses a price entry
 fn price<I>(input: State<I>) -> ParseResult<Price, I>
 where I: Stream<Item=char> {
@@ -177,6 +193,120 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
+/// Parses transaction code. e.g. (cheque #802)
+fn code<I>(input: State<I>) -> ParseResult<String, I>
+where I: Stream<Item=char> {
+    between(char('('), char(')'), many(satisfy(|c| c != '\r' && c != '\n' && c != ')')))
+        .parse_state(input)
+}
+
+/// Parses a payee.
+fn payee<I>(input: State<I>) -> ParseResult<String,I>
+where I: Stream<Item=char> {
+    many1(satisfy(|c| c != ';' && c != '\n' && c != '\r'))
+        .parse_state(input)
+}
+
+/// Parses a comment.
+fn comment<I>(input: State<I>) -> ParseResult<String,I>
+where I: Stream<Item=char> {
+    char(';').with(many(satisfy(|c| c != '\r' && c != '\n')))
+        .parse_state(input)
+}
+
+// Parses a comment line, which may start with whitespace.
+fn comment_line<I>(input: State<I>) -> ParseResult<String,I>
+where I: Stream<Item=char> {
+    many::<String, _>(parser(whitespace)).with(parser(comment)).skip(parser(line_ending))
+        .parse_state(input)
+}
+
+/// Parses a transaction header.
+fn header<I>(input: State<I>) -> ParseResult<Header,I>
+where I: Stream<Item=char> {
+    (
+        parser(date).skip(parser(whitespace)),
+        parser(status).skip(parser(whitespace)),
+        optional(parser(code).skip(parser(whitespace))),
+        parser(payee),
+        optional(parser(comment))
+    )
+        .map(|(date, status, code, payee, comment)|
+            Header::new(date, status, code, payee, comment))
+        .parse_state(input)
+}
+
+/// Parses a sub-account name, which must be alphanumeric.
+fn sub_account<I>(input: State<I>) -> ParseResult<String,I>
+where I: Stream<Item=char> {
+    many1(alpha_num())
+        .parse_state(input)
+}
+
+/// Parses an account, made up of sub-accounts separated by colons.
+fn account<I>(input: State<I>) -> ParseResult<Vec<String>,I>
+where I: Stream<Item=char> {
+    sep_by1(parser(sub_account), char(':'))
+        .parse_state(input)
+}
+
+/// Parses a transaction posting.
+fn posting<I>(input: State<I>) -> ParseResult<RawPosting, I>
+where I: Stream<Item=char> {
+    (
+        parser(account).skip(optional(parser(whitespace))),
+        parser(commodity_or_inferred).skip(optional(parser(whitespace))),
+        optional(parser(comment))
+    )
+        .map(|(sub_accounts, (commodity_source, opt_commodity), opt_comment)|
+            RawPosting::new(sub_accounts, opt_commodity, commodity_source, opt_comment))
+        .parse_state(input)
+}
+
+/// Parses a transaction posting line, which must begin with whitespace.
+fn posting_line<I>(input: State<I>) -> ParseResult<RawPosting, I>
+where I: Stream<Item=char> {
+    many1::<String, _>(parser(whitespace)).with(parser(posting)).skip(parser(line_ending))
+        .parse_state(input)
+}
+
+/// Parses a whole transaction.
+fn transaction<I>(input: State<I>) -> ParseResult<ParseTree, I>
+where I: Stream<Item=char> {
+    (
+        parser(header).skip(parser(line_ending)),
+        many1(try(parser(comment_line).map(|_| None))
+                .or(try(parser(posting_line).map(|p| Some(p)))))
+    )
+        .map(|(header, postings) : (Header, Vec<Option<RawPosting>>)| {
+            let raw_postings = postings.into_iter().filter_map(|p| p).collect();
+            ParseTree::Transaction(header, raw_postings)
+        })
+        .parse_state(input)
+}
+
+/// Parses and discards any number of comment or empty line.
+fn skip_comment_or_empty_lines<I>(input: State<I>) -> ParseResult<(), I>
+where I: Stream<Item=char> {
+    skip_many(skip_many(parser(whitespace))
+            .skip(optional(parser(comment)))
+            .skip(parser(line_ending)))
+        .parse_state(input)
+}
+
+/// Parses a complete ledger, extracting transactions and prices.
+fn ledger<I>(input: State<I>) -> ParseResult<Vec<ParseTree>, I>
+where I: Stream<Item=char> {
+    // skip one or more comment or empty lines
+    // parse transactions or prices separated, which may be separated bycomment or empty lines
+    parser(skip_comment_or_empty_lines)
+        .with(many(
+            parser(transaction)
+                .or(parser(price).map(|p| ParseTree::Price(p)))
+                .skip(parser(skip_comment_or_empty_lines))))
+        .parse_state(input)
+}
+
 
 
 // FILES
@@ -184,7 +314,7 @@ where I: Stream<Item=char> {
 pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
     let mut file = File::open(file_path).ok().expect("Failed to open file");
     let mut contents = String::new();
-    
+
     file.read_to_string(&mut contents).ok().expect("Failed to read from file");
 
     let result = parser(price_db).parse(&contents[..]);
@@ -195,13 +325,29 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
     }
 }
 
+pub fn parse_ledger(file_path: &str) -> Vec<ParseTree> {
+    let mut file = File::open(file_path).ok().expect("Failed to open file");
+    let mut contents = String::new();
+
+    file.read_to_string(&mut contents).ok().expect("Failed to read from file");
+
+    let result = parser(ledger).parse(&contents[..]);
+
+    match result {
+        Ok((tree, _)) => tree,
+        Err(err) => panic!("{}", err),
+    }
+}
+
 
 
 #[cfg(test)]
 mod tests {
-    use super::{amount, commodity, commodity_amount_then_symbol, commodity_symbol_then_amount,
-        date, line_ending, price, price_db, quoted_symbol, status, symbol, two_digits,
-        two_digits_to_u32, unquoted_symbol, whitespace};
+    use super::{account, amount, code, comment, comment_line, skip_comment_or_empty_lines,
+        commodity, commodity_amount_then_symbol, commodity_or_inferred,
+        commodity_symbol_then_amount, date, header, ledger, line_ending, payee, posting,
+        posting_line, price, price_db, quoted_symbol, status, sub_account, symbol, transaction,
+        two_digits, two_digits_to_u32, unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
@@ -210,6 +356,7 @@ mod tests {
     use core::price::*;
     use core::symbol::*;
     use core::transaction::*;
+    use parser::types::*;
 
     // HELPERS
 
@@ -409,6 +556,23 @@ mod tests {
     }
 
     #[test]
+    fn commodity_or_inferred_commodity_provided() {
+        let result = parser(commodity_or_inferred)
+            .parse("$13,245.46").map(|x| x.0);
+        assert_eq!(result, Ok((CommoditySource::Provided, Some(Commodity::new(
+            d128!(13245.46),
+            Symbol::new("$", QuoteOption::Unquoted),
+            RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))))));
+    }
+
+    #[test]
+    fn commodity_or_inferred_no_commodity() {
+        let result = parser(commodity_or_inferred)
+            .parse("").map(|x| x.0);
+        assert_eq!(result, Ok((CommoditySource::Inferred, None)));
+    }
+
+    #[test]
     fn price_test() {
         let result = parser(price)
             .parse("P 2015-10-25 \"MUTF2351\" $5.42").map(|x| x.0);
@@ -488,6 +652,430 @@ mod tests {
         let result = parser(status)
             .parse("!").map(|x| x.0);
         assert_eq!(result, Ok(Status::Uncleared));
+    }
+
+    #[test]
+    fn code_empty() {
+        let result = parser(code)
+            .parse("()").map(|x| x.0);
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn code_short() {
+        let result = parser(code)
+            .parse("(89)").map(|x| x.0);
+        assert_eq!(result, Ok("89".to_string()));
+    }
+
+    #[test]
+    fn code_long() {
+        let result = parser(code)
+            .parse("(conf# abc-123-DEF)").map(|x| x.0);
+        assert_eq!(result, Ok("conf# abc-123-DEF".to_string()));
+    }
+
+    #[test]
+    fn payee_empty_payee_is_error() {
+        let result = parser(payee)
+            .parse("").map(|x| x.0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn payee_single_character() {
+        let result = parser(payee)
+            .parse("Z").map(|x| x.0);
+        assert_eq!(result, Ok("Z".to_string()));
+    }
+
+    #[test]
+    fn payee_short() {
+        let result = parser(payee)
+            .parse("WonderMart").map(|x| x.0);
+        assert_eq!(result, Ok("WonderMart".to_string()));
+    }
+
+    #[test]
+    fn payee_long() {
+        let result = parser(payee)
+            .parse("WonderMart - groceries, kitchen supplies (pot), light bulbs").map(|x| x.0);
+        assert_eq!(result,
+            Ok("WonderMart - groceries, kitchen supplies (pot), light bulbs".to_string()));
+    }
+    
+    #[test]
+    fn comment_empty() {
+        let result = parser(comment)
+            .parse(";").map(|x| x.0);
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn comment_no_leading_space() {
+        let result = parser(comment)
+            .parse(";Comment").map(|x| x.0);
+        assert_eq!(result, Ok("Comment".to_string()));
+    }
+
+    #[test]
+    fn comment_with_leading_space() {
+        let result = parser(comment)
+            .parse("; Comment").map(|x| x.0);
+        assert_eq!(result, Ok(" Comment".to_string()));
+    }
+
+    #[test]
+    fn comment_line_with_leading_whitespace() {
+        let result = parser(comment_line)
+            .parse("  ;Comment\r\n").map(|x| x.0);
+        assert_eq!(result, Ok("Comment".to_string()));
+    }
+
+    #[test]
+    fn comment_line_no_leading_whitespace() {
+        let result = parser(comment_line)
+            .parse(";Comment\r\n").map(|x| x.0);
+        assert_eq!(result, Ok("Comment".to_string()));
+    }
+
+    #[test]
+    fn header_full() {
+        let result = parser(header)
+            .parse("2015-10-20 * (conf# abc-123) Payee ;Comment").map(|x| x.0);
+        assert_eq!(result, Ok(Header::new(
+            Local.ymd(2015, 10, 20),
+            Status::Cleared,
+            Some("conf# abc-123".to_string()),
+            "Payee ".to_string(),
+            Some("Comment".to_string()))));
+    }
+
+    #[test]
+    fn header_with_code_and_no_comment() {
+        let result = parser(header)
+            .parse("2015-10-20 ! (conf# abc-123) Payee").map(|x| x.0);
+        assert_eq!(result, Ok(Header::new(
+            Local.ymd(2015, 10, 20),
+            Status::Uncleared,
+            Some("conf# abc-123".to_string()),
+            "Payee".to_string(),
+            None)));
+    }
+
+    #[test]
+    fn header_with_comment_and_no_code() {
+        let result = parser(header)
+            .parse("2015-10-20 * Payee ;Comment").map(|x| x.0);
+        assert_eq!(result, Ok(Header::new(
+            Local.ymd(2015, 10, 20),
+            Status::Cleared,
+            None,
+            "Payee ".to_string(),
+            Some("Comment".to_string()))));
+    }
+
+    #[test]
+    fn header_with_no_code_or_comment() {
+        let result = parser(header)
+            .parse("2015-10-20 * Payee").map(|x| x.0);
+        assert_eq!(result, Ok(Header::new(
+            Local.ymd(2015, 10, 20),
+            Status::Cleared,
+            None,
+            "Payee".to_string(),
+            None)));
+    }
+
+    #[test]
+    fn sub_account_alphanumeric() {
+        let result = parser(sub_account)
+            .parse("AZaz09").map(|x| x.0);
+        assert_eq!(result, Ok("AZaz09".to_string()));
+    }
+
+    #[test]
+    fn sub_account_can_start_with_digits() {
+        let result = parser(sub_account)
+            .parse("123abcABC").map(|x| x.0);
+        assert_eq!(result, Ok("123abcABC".to_string()));
+    }
+
+    #[test]
+    fn account_single_level() {
+        let result = parser(account)
+            .parse("Expenses").map(|x| x.0);
+        assert_eq!(result, Ok(vec!["Expenses".to_string()]));
+    }
+
+    #[test]
+    fn account_multiple_level() {
+        let result = parser(account)
+            .parse("Expenses:Food:Groceries").map(|x| x.0);
+        assert_eq!(result, Ok(vec![
+            "Expenses".to_string(),
+            "Food".to_string(),
+            "Groceries".to_string()
+        ]));
+    }
+
+    #[test]
+    fn posting_with_all_components() {
+        let result = parser(posting)
+            .parse("Assets:Savings\t$45.00\t;comment").map(|x| x.0);
+        assert_eq!(result, Ok(RawPosting::new(
+            vec![
+                "Assets".to_string(),
+                "Savings".to_string()
+            ],
+            Some(Commodity::new(
+                d128!(45.00),
+                Symbol::new("$".to_string(), QuoteOption::Unquoted),
+                RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
+            CommoditySource::Provided,
+            Some("comment".to_string()))));
+    }
+
+    #[test]
+    fn posting_with_all_components_alternate_commodity() {
+        let result = parser(posting)
+            .parse("Assets:Investments\t13.508 \"MUTF2351\"\t;comment").map(|x| x.0);
+        assert_eq!(result, Ok(RawPosting::new(
+            vec![
+                "Assets".to_string(),
+                "Investments".to_string()
+            ],
+            Some(Commodity::new(
+                d128!(13.508),
+                Symbol::new("MUTF2351".to_string(), QuoteOption::Quoted),
+                RenderOptions::new(SymbolPosition::Right, Spacing::Space))),
+            CommoditySource::Provided,
+            Some("comment".to_string()))));
+    }
+
+    #[test]
+    fn posting_with_commodity_no_comment() {
+        let result = parser(posting)
+            .parse("Assets:Savings\t$45.00").map(|x| x.0);
+        assert_eq!(result, Ok(RawPosting::new(
+            vec![
+                "Assets".to_string(),
+                "Savings".to_string()
+            ],
+            Some(Commodity::new(
+                d128!(45.00),
+                Symbol::new("$".to_string(), QuoteOption::Unquoted),
+                RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
+            CommoditySource::Provided,
+            None)));
+    }
+
+    #[test]
+    fn posting_inferred_commodity_with_comment() {
+        let result = parser(posting)
+            .parse("Assets:Savings\t;comment").map(|x| x.0);
+        assert_eq!(result, Ok(RawPosting::new(
+            vec![
+                "Assets".to_string(),
+                "Savings".to_string()
+            ],
+            None,
+            CommoditySource::Inferred,
+            Some("comment".to_string()))));
+    }
+
+    #[test]
+    fn posting_inferred_commodity_no_comment() {
+        let result = parser(posting)
+            .parse("Assets:Savings").map(|x| x.0);
+        assert_eq!(result, Ok(RawPosting::new(
+            vec![
+                "Assets".to_string(),
+                "Savings".to_string()
+            ],
+            None,
+            CommoditySource::Inferred,
+            None)));
+    }
+
+    #[test]
+    fn posting_line_begins_with_spaces() {
+        let result = parser(posting_line)
+            .parse("  Assets:Savings\r\n").map(|x| x.0);
+        assert_eq!(result, Ok(RawPosting::new(
+            vec![
+                "Assets".to_string(),
+                "Savings".to_string()
+            ],
+            None,
+            CommoditySource::Inferred,
+            None)));
+    }
+
+    #[test]
+    fn posting_line_begins_with_tab() {
+        let result = parser(posting_line)
+            .parse("\tAssets:Savings\r\n").map(|x| x.0);
+        assert_eq!(result, Ok(RawPosting::new(
+            vec![
+                "Assets".to_string(),
+                "Savings".to_string()
+            ],
+            None,
+            CommoditySource::Inferred,
+            None)));
+    }
+
+    #[test]
+    fn transaction_basic() {
+        let result = parser(transaction)
+            .parse("\
+                2016-06-07 * Basic transaction ;comment\n\
+                \tExpenses:Groceries    $45.00\n\
+                \tLiabilities:Credit\n\
+            ").map(|x| x.0);
+        assert_eq!(result, Ok(ParseTree::Transaction(
+            Header::new(
+                Local.ymd(2016, 6, 7),
+                Status::Cleared,
+                None,
+                "Basic transaction ".to_string(),
+                Some("comment".to_string())),
+            vec![
+                RawPosting::new(
+                    vec![
+                        "Expenses".to_string(),
+                        "Groceries".to_string(),
+                    ],
+                    Some(Commodity::new(
+                        d128!(45.00),
+                        Symbol::new("$".to_string(), QuoteOption::Unquoted),
+                        RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
+                    CommoditySource::Provided,
+                    None),
+                RawPosting::new(
+                    vec![
+                        "Liabilities".to_string(),
+                        "Credit".to_string(),
+                    ],
+                    None,
+                    CommoditySource::Inferred,
+                    None)
+            ]
+        )));
+    }
+
+    #[test]
+    fn transaction_with_comment() {
+        let result = parser(transaction)
+            .parse("\
+                2016-06-07 * Basic transaction ;comment\n\
+                ; a comment in a transaction
+                \tExpenses:Groceries    $45.00\n\
+                \tLiabilities:Credit\n\
+            ").map(|x| x.0);
+        assert_eq!(result, Ok(ParseTree::Transaction(
+            Header::new(
+                Local.ymd(2016, 6, 7),
+                Status::Cleared,
+                None,
+                "Basic transaction ".to_string(),
+                Some("comment".to_string())),
+            vec![
+                RawPosting::new(
+                    vec![
+                        "Expenses".to_string(),
+                        "Groceries".to_string(),
+                    ],
+                    Some(Commodity::new(
+                        d128!(45.00),
+                        Symbol::new("$".to_string(), QuoteOption::Unquoted),
+                        RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
+                    CommoditySource::Provided,
+                    None),
+                RawPosting::new(
+                    vec![
+                        "Liabilities".to_string(),
+                        "Credit".to_string(),
+                    ],
+                    None,
+                    CommoditySource::Inferred,
+                    None)
+            ]
+        )));
+    }
+
+    #[test]
+    fn skip_comment_or_empty_lines_comment() {
+        let result = parser(skip_comment_or_empty_lines)
+            .parse("; comment\r\n").map(|x| x.0);
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn skip_comment_or_empty_lines_comments() {
+        let result = parser(skip_comment_or_empty_lines)
+            .parse("; comment\r\n; another comment\r\n").map(|x| x.0);
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn skip_comment_or_empty_lines_empty_line() {
+        let result = parser(skip_comment_or_empty_lines)
+            .parse("  \r\n").map(|x| x.0);
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn skip_comment_or_empty_lines_empty_lines() {
+        let result = parser(skip_comment_or_empty_lines)
+            .parse("  \r\n\r\n\t\r\n").map(|x| x.0);
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn skip_comment_or_empty_lines_mix() {
+        let result = parser(skip_comment_or_empty_lines)
+            .parse("  \r\n; comment\r\n\t; indented comment\r\n\r\n").map(|x| x.0);
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn ledger_single_transaction() {
+        let result = parser(ledger)
+            .parse("; Preamble\n\
+                \n\
+                2016-06-07 * Basic transaction ;comment\n\
+                \tExpenses:Groceries    $45.00\n\
+                \tLiabilities:Credit\n\
+                \n\
+            ").map(|x| x.0);
+        println!("{:?}", result);
+        assert_eq!(result.is_ok(), true);
+        assert_eq!(result.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn ledger_small_sample() {
+        let result = parser(ledger)
+            .parse("; Preamble\n\
+                \n\
+                2016-06-07 * Basic transaction ;comment\n\
+                \tExpenses:Groceries    $45.00\n\
+                \tLiabilities:Credit\n\
+                \t\n\
+                P 2016-06-07 \"MUTF2351\" $4.56\n\
+                P 2016-06-07 AAPL $23.33\n\
+                \n\
+                ; Separator\n\
+                \n\
+                2016-06-07 * Basic transaction ;comment\n\
+                \tExpenses:Groceries    $45.00\n\
+                \tLiabilities:Credit\n\
+            ").map(|x| x.0);
+        println!("{:?}", result);
+        assert_eq!(result.is_ok(), true);
+        assert_eq!(result.unwrap().len(), 4);
     }
 
 }
