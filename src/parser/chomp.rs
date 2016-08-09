@@ -86,9 +86,9 @@ fn day(i: Input<u8>) -> U8Result<u32> {
 fn date(i: Input<u8>) -> U8Result<Date<Local>> {
     parse!{i;
         let year =  year();
-                    token(b'-');
+        token(b'-');
         let month = month();
-                    token(b'-');
+        token(b'-');
         let day =   day();
 
         ret Local.ymd(year, month, day)
@@ -117,7 +117,7 @@ fn symbol(i: Input<u8>) -> U8Result<Symbol> {
 fn amount(i: Input<u8>) -> U8Result<d128> {
     parse!{i;
         let sign = option(|i| token(i, b'-'), b'+');
-        let number = take_while1(is_amount_char);      
+        let number = take_while1(is_amount_char);
         ret make_amount(sign, number)
     }
 }
