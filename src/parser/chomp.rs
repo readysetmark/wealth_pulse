@@ -1,7 +1,7 @@
 use rust_core::str::FromStr;
 use chomp::{Input, U8Result};
 use chomp::{count, option, or, string, take_while, take_while1, token};
-use chomp::ascii::{digit};
+use chomp::ascii::{digit, is_digit, is_end_of_line, is_horizontal_space};
 use chomp::buffer::{Source, Stream, StreamError};
 use chrono::date::Date;
 use chrono::offset::local::Local;
@@ -38,43 +38,31 @@ fn make_amount(sign: u8, number: &[u8]) -> d128 {
     d128::from_str(&qty[..]).unwrap()
 }
 
-fn is_whitespace_char(c: u8) -> bool {
-    c == b'\t' || c == b' '
-}
-
 fn is_quoted_symbol_char(c: u8) -> bool {
     c != b'\"' && c != b'\r' && c != b'\n'
 }
 
-fn is_digit_char(c: u8) -> bool {
-    b'0' <= c && c <= b'9'
-}
-
-fn is_newline_char(c: u8) -> bool {
-    c == b'\r' && c == b'\n'
-}
-
 fn is_unquoted_symbol_char(c: u8) -> bool {
-    c != b'-' && c != b';' && c != b'\"' && !is_newline_char(c)
-     && !is_digit_char(c) && !is_whitespace_char(c)
+    c != b'-' && c != b';' && c != b'\"' && !is_end_of_line(c)
+     && !is_digit(c) && !is_horizontal_space(c)
 }
 
 fn is_amount_char(c: u8) -> bool {
-    is_digit_char(c) || c == b'.' || c == b','
+    is_digit(c) || c == b'.' || c == b','
 }
 
 
 // PARSERS
 
 fn whitespace(i: Input<u8>) -> U8Result<Spacing> {
-    take_while(i, is_whitespace_char)
+    take_while(i, is_horizontal_space)
         .map(|ws|
             if ws.len() > 0 { Spacing::Space }
             else { Spacing::NoSpace })
 }
 
 fn mandatory_whitespace(i: Input<u8>) -> U8Result<()> {
-    take_while1(i, is_whitespace_char).map(|_| ())
+    take_while1(i, is_horizontal_space).map(|_| ())
 }
 
 fn line_ending(i: Input<u8>) -> U8Result<()> {
