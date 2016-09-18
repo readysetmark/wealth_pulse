@@ -9,7 +9,7 @@ use chrono::offset::TimeZone;
 use decimal::d128;
 use std::fs::File;
 use std::str;
-use core::commodity::*;
+use core::instrument::*;
 use core::price::*;
 use core::symbol::*;
 
@@ -122,30 +122,30 @@ fn amount(i: Input<u8>) -> U8Result<d128> {
     }
 }
 
-fn commodity_symbol_then_amount(i: Input<u8>) -> U8Result<Commodity> {
+fn instrument_symbol_then_amount(i: Input<u8>) -> U8Result<Instrument> {
     parse!{i;
         let symbol = symbol();
         let spacing = whitespace();
         let amount = amount();
 
-        ret Commodity::new(amount, symbol,
+        ret Instrument::new(amount, symbol,
             RenderOptions::new(SymbolPosition::Left, spacing))
     }
 }
 
-fn commodity_amount_then_symbol(i: Input<u8>) -> U8Result<Commodity> {
+fn instrument_amount_then_symbol(i: Input<u8>) -> U8Result<Instrument> {
     parse!{i;
         let amount = amount();
         let spacing = whitespace();
         let symbol = symbol();
 
-        ret Commodity::new(amount, symbol,
+        ret Instrument::new(amount, symbol,
             RenderOptions::new(SymbolPosition::Right, spacing))
     }
 }
 
-fn commodity(i: Input<u8>) -> U8Result<Commodity> {
-    or(i, commodity_symbol_then_amount, commodity_amount_then_symbol)
+fn instrument(i: Input<u8>) -> U8Result<Instrument> {
+    or(i, instrument_symbol_then_amount, instrument_amount_then_symbol)
 }
 
 fn price(i: Input<u8>) -> U8Result<Price> {
@@ -156,9 +156,9 @@ fn price(i: Input<u8>) -> U8Result<Price> {
         mandatory_whitespace();
         let symbol = symbol();
         mandatory_whitespace();
-        let commodity = commodity();
+        let instrument = instrument();
 
-        ret Price::new(date, symbol, commodity)
+        ret Price::new(date, symbol, instrument)
     }
 }
 
@@ -196,14 +196,13 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 
 #[cfg(test)]
 mod tests {
-    use super::{commodity, commodity_amount_then_symbol,
-        commodity_symbol_then_amount, date, day, make_amount, month, price,
-        parse_pricedb, price_line, amount, quoted_symbol, unquoted_symbol,
-        symbol, whitespace, year};
+    use super::{date, day, instrument, instrument_amount_then_symbol,
+        instrument_symbol_then_amount, make_amount, month, price, parse_pricedb, price_line,
+        amount, quoted_symbol, unquoted_symbol, symbol, whitespace, year};
     use chomp::{parse_only};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
-    use core::commodity::*;
+    use core::instrument::*;
     use core::price::*;
     use core::symbol::*;
 
@@ -327,9 +326,9 @@ mod tests {
     }
 
     #[test]
-    fn commodity_symbol_then_amount_no_whitespace() {
-        let result = parse_only(commodity_symbol_then_amount, b"$13,245.00");
-        assert_eq!(result, Ok(Commodity::new(
+    fn instrument_symbol_then_amount_no_whitespace() {
+        let result = parse_only(instrument_symbol_then_amount, b"$13,245.00");
+        assert_eq!(result, Ok(Instrument::new(
             d128!(13245.00),
             Symbol::new("$", QuoteOption::Unquoted),
             RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)
@@ -337,9 +336,9 @@ mod tests {
     }
 
     #[test]
-    fn commodity_symbol_then_amount_with_whitespace() {
-        let result = parse_only(commodity_symbol_then_amount, b"US$ -13,245.00");
-        assert_eq!(result, Ok(Commodity::new(
+    fn instrument_symbol_then_amount_with_whitespace() {
+        let result = parse_only(instrument_symbol_then_amount, b"US$ -13,245.00");
+        assert_eq!(result, Ok(Instrument::new(
             d128!(-13245.00),
             Symbol::new("US$", QuoteOption::Unquoted),
             RenderOptions::new(SymbolPosition::Left, Spacing::Space)
@@ -347,9 +346,9 @@ mod tests {
     }
 
     #[test]
-    fn commodity_amount_then_symbol_no_whitespace() {
-        let result = parse_only(commodity_amount_then_symbol, b"13,245.463RUST");
-        assert_eq!(result, Ok(Commodity::new(
+    fn instrument_amount_then_symbol_no_whitespace() {
+        let result = parse_only(instrument_amount_then_symbol, b"13,245.463RUST");
+        assert_eq!(result, Ok(Instrument::new(
             d128!(13245.463),
             Symbol::new("RUST", QuoteOption::Unquoted),
             RenderOptions::new(SymbolPosition::Right, Spacing::NoSpace)
@@ -357,10 +356,10 @@ mod tests {
     }
 
     #[test]
-    fn commodity_amount_then_symbol_with_whitespace() {
-        let result = parse_only(commodity_amount_then_symbol,
+    fn instrument_amount_then_symbol_with_whitespace() {
+        let result = parse_only(instrument_amount_then_symbol,
             b"13,245.463 \"MUTF2351\"");
-        assert_eq!(result, Ok(Commodity::new(
+        assert_eq!(result, Ok(Instrument::new(
             d128!(13245.463),
             Symbol::new("MUTF2351", QuoteOption::Quoted),
             RenderOptions::new(SymbolPosition::Right, Spacing::Space)
@@ -368,9 +367,9 @@ mod tests {
     }    
 
     #[test]
-    fn commodity_with_symbol_then_amount() {
-        let result = parse_only(commodity, b"$13,245.46");
-        assert_eq!(result, Ok(Commodity::new(
+    fn instrument_with_symbol_then_amount() {
+        let result = parse_only(instrument, b"$13,245.46");
+        assert_eq!(result, Ok(Instrument::new(
             d128!(13245.46),
             Symbol::new("$", QuoteOption::Unquoted),
             RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)
@@ -378,9 +377,9 @@ mod tests {
     }
 
     #[test]
-    fn commodity_with_amount_then_symbol() {
-        let result = parse_only(commodity, b"13,245.463 \"MUTF2351\"");
-        assert_eq!(result, Ok(Commodity::new(
+    fn instrument_with_amount_then_symbol() {
+        let result = parse_only(instrument, b"13,245.463 \"MUTF2351\"");
+        assert_eq!(result, Ok(Instrument::new(
             d128!(13245.463),
             Symbol::new("MUTF2351", QuoteOption::Quoted),
             RenderOptions::new(SymbolPosition::Right, Spacing::Space)
@@ -393,7 +392,7 @@ mod tests {
         assert_eq!(result, Ok(Price::new(
             Local.ymd(2016, 2, 7),
             Symbol::new("MUTF2351", QuoteOption::Quoted),
-            Commodity::new(
+            Instrument::new(
                 d128!(5.42),
                 Symbol::new("$", QuoteOption::Unquoted),
                 RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)
@@ -408,7 +407,7 @@ mod tests {
         assert_eq!(result, Ok(Price::new(
             Local.ymd(2016, 2, 7),
             Symbol::new("MUTF2351", QuoteOption::Quoted),
-            Commodity::new(
+            Instrument::new(
                 d128!(5.42),
                 Symbol::new("$", QuoteOption::Unquoted),
                 RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)
@@ -429,7 +428,7 @@ mod tests {
             Price::new(
                 Local.ymd(2016, 2, 7),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
-                Commodity::new(
+                Instrument::new(
                     d128!(5.41),
                     Symbol::new("$", QuoteOption::Unquoted),
                     RenderOptions::new(
@@ -446,7 +445,7 @@ mod tests {
             Price::new(
                 Local.ymd(2016, 2, 7),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
-                Commodity::new(
+                Instrument::new(
                     d128!(5.41),
                     Symbol::new("$", QuoteOption::Unquoted),
                     RenderOptions::new(
@@ -456,7 +455,7 @@ mod tests {
             Price::new(
                 Local.ymd(2016, 2, 8),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
-                Commodity::new(
+                Instrument::new(
                     d128!(5.61),
                     Symbol::new("$", QuoteOption::Unquoted),
                     RenderOptions::new(
@@ -466,7 +465,7 @@ mod tests {
             Price::new(
                 Local.ymd(2016, 2, 9),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
-                Commodity::new(
+                Instrument::new(
                     d128!(7.10),
                     Symbol::new("$", QuoteOption::Unquoted),
                     RenderOptions::new(

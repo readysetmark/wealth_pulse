@@ -1,29 +1,29 @@
 use chrono::date::Date;
 use chrono::offset::local::Local;
 use std::fmt;
-use super::commodity::Commodity;
+use super::instrument::Instrument;
 use super::symbol::Symbol;
 
 #[derive(PartialEq, Debug)]
 pub struct Price {
     date: Date<Local>,
     symbol: Symbol,
-    commodity: Commodity,
+    instrument: Instrument,
 }
 
 impl Price {
-    pub fn new(date: Date<Local>, symbol: Symbol, commodity: Commodity) -> Price {
+    pub fn new(date: Date<Local>, symbol: Symbol, instrument: Instrument) -> Price {
         Price {
             date: date,
             symbol: symbol,
-            commodity: commodity,
+            instrument: instrument,
         }
     }
 }
 
 impl fmt::Display for Price {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "P {} {} {}", self.date.format("%Y-%m-%d"), self.symbol, self.commodity)
+        write!(f, "P {} {} {}", self.date.format("%Y-%m-%d"), self.symbol, self.instrument)
     }
 }
 
@@ -31,7 +31,7 @@ impl fmt::Display for Price {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::commodity::*;
+    use core::instrument::*;
     use core::symbol::*;
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
@@ -41,7 +41,7 @@ mod tests {
         let result = format!("{}", Price::new(
                 Local.ymd(2016, 2, 7),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
-                Commodity::new(
+                Instrument::new(
                     d128!(5.42),
                     Symbol::new("$", QuoteOption::Unquoted),
                     RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))));

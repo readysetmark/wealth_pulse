@@ -31,15 +31,15 @@ impl RenderOptions {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Commodity {
+pub struct Instrument {
     amount: d128,
     symbol: Symbol,
     render_options: RenderOptions,
 }
 
-impl Commodity {
-    pub fn new(amount: d128, symbol: Symbol, render_opts: RenderOptions) -> Commodity {
-        Commodity {
+impl Instrument {
+    pub fn new(amount: d128, symbol: Symbol, render_opts: RenderOptions) -> Instrument {
+        Instrument {
             amount: amount,
             symbol: symbol,
             render_options: render_opts,
@@ -47,7 +47,7 @@ impl Commodity {
     }
 }
 
-impl fmt::Display for Commodity {
+impl fmt::Display for Instrument {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let spacing =
             match self.render_options.spacing {
@@ -69,8 +69,8 @@ mod tests {
     use core::symbol::*;
 
     #[test]
-    fn commodity_fmt_symbol_left_with_space() {
-        let result = format!("{}", Commodity::new(
+    fn instrument_fmt_symbol_left_with_space() {
+        let result = format!("{}", Instrument::new(
             d128!(13245.00),
             Symbol::new("US$", QuoteOption::Unquoted),
             RenderOptions::new(SymbolPosition::Left, Spacing::Space)));
@@ -78,8 +78,8 @@ mod tests {
     }
 
     #[test]
-    fn commodity_fmt_symbol_left_no_space() {
-        let result = format!("{}", Commodity::new(
+    fn instrument_fmt_symbol_left_no_space() {
+        let result = format!("{}", Instrument::new(
                 d128!(13245.00),
                 Symbol::new("$", QuoteOption::Unquoted),
                 RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)));
@@ -87,8 +87,8 @@ mod tests {
     }
 
     #[test]
-    fn commodity_fmt_symbol_right_with_space() {
-        let result = format!("{}", Commodity::new(
+    fn instrument_fmt_symbol_right_with_space() {
+        let result = format!("{}", Instrument::new(
                 d128!(13245.463),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
                 RenderOptions::new(SymbolPosition::Right, Spacing::Space)));
@@ -96,8 +96,8 @@ mod tests {
     }
 
     #[test]
-    fn commodity_fmt_symbol_right_no_space() {
-        let result = format!("{}", Commodity::new(
+    fn instrument_fmt_symbol_right_no_space() {
+        let result = format!("{}", Instrument::new(
                 d128!(13245.463),
                 Symbol::new("RUST", QuoteOption::Unquoted),
                 RenderOptions::new(SymbolPosition::Right, Spacing::NoSpace)));
