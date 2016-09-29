@@ -2,6 +2,7 @@ Wealth Pulse
 ============
 
 [![Build Status](https://travis-ci.org/readysetmark/wealth_pulse.svg?branch=master)](https://travis-ci.org/readysetmark/wealth_pulse)
+[![Build status](https://ci.appveyor.com/api/projects/status/63mehh2jefaslhj0/branch/master?svg=true)](https://ci.appveyor.com/project/readysetmark/wealth-pulse/branch/master)
 
 Wealth Pulse personal finance tracking application, of sorts, supporting 
 double-entry accounting. "Of sorts" because it is only used for reporting --
