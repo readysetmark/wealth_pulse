@@ -9,7 +9,7 @@ use combine::primitives::{State, Stream};
 use decimal::d128;
 use std::fs::File;
 use std::io::Read;
-use core::instrument::*;
+use core::amount::*;
 use core::price::*;
 use core::symbol::*;
 use core::transaction::*;
@@ -66,8 +66,8 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
-/// Parses an amount
-fn amount<I>(input: State<I>) -> ParseResult<d128,I>
+/// Parses a quantity
+fn quantity<I>(input: State<I>) -> ParseResult<d128,I>
 where I: Stream<Item=char> {
     (
         optional(char('-')).map(|x| {
@@ -112,55 +112,54 @@ where I: Stream<Item=char> {
         .parse_state(input)
 }
 
-/// Parses an instrument in the format of symbol then amount.
-fn instrument_symbol_then_amount<I>(input: State<I>) -> ParseResult<Instrument, I>
+/// Parses an amount in the format of symbol then quantity.
+fn amount_symbol_then_quantity<I>(input: State<I>) -> ParseResult<Amount, I>
 where I: Stream<Item=char> {
-    (parser(symbol), optional(parser(whitespace)), parser(amount))
-        .map(|(symbol, opt_whitespace, amount)| {
+    (parser(symbol), optional(parser(whitespace)), parser(quantity))
+        .map(|(symbol, opt_whitespace, quantity)| {
             let spacing = match opt_whitespace {
                 Some(_) => Spacing::Space,
                 None => Spacing::NoSpace,
             };
             let render_opts = RenderOptions::new(SymbolPosition::Left, spacing);
-            Instrument::new(amount, symbol, render_opts)
+            Amount::new(quantity, symbol, render_opts)
         })
         .parse_state(input)
 }
 
-/// Parses an instrument in the format of amount then symbol.
-fn instrument_amount_then_symbol<I>(input: State<I>) -> ParseResult<Instrument, I>
+/// Parses an amount in the format of quantity then symbol.
+fn amount_quantity_then_symbol<I>(input: State<I>) -> ParseResult<Amount, I>
 where I: Stream<Item=char> {
-    (parser(amount), optional(parser(whitespace)), parser(symbol))
-        .map(|(amount, opt_whitespace, symbol)| {
+    (parser(quantity), optional(parser(whitespace)), parser(symbol))
+        .map(|(quantity, opt_whitespace, symbol)| {
             let spacing = match opt_whitespace {
                 Some(_) => Spacing::Space,
                 None => Spacing::NoSpace,
             };
             let render_opts = RenderOptions::new(SymbolPosition::Right, spacing);
-            Instrument::new(amount, symbol, render_opts)
+            Amount::new(quantity, symbol, render_opts)
         })
         .parse_state(input)
 }
 
-/// Parses an instrument
-fn instrument<I>(input: State<I>) -> ParseResult<Instrument, I>
+/// Parses an amount
+fn amount<I>(input: State<I>) -> ParseResult<Amount, I>
 where I: Stream<Item=char> {
-    parser(instrument_symbol_then_amount)
-        .or(parser(instrument_amount_then_symbol))
+    parser(amount_symbol_then_quantity)
+        .or(parser(amount_quantity_then_symbol))
         .parse_state(input)
 }
 
-/// Parses an instrument or an inferred instrument
-fn instrument_or_inferred<I>(input: State<I>)
--> ParseResult<(InstrumentSource, Option<Instrument>), I>
+/// Parses an amount or an inferred amount
+fn amount_or_inferred<I>(input: State<I>) -> ParseResult<(AmountSource, Option<Amount>), I>
 where I: Stream<Item=char> {
-    optional(parser(instrument))
-        .map(|opt_instrument| {
-            let source = match opt_instrument {
-                Some(_) => InstrumentSource::Provided,
-                None => InstrumentSource::Inferred
+    optional(parser(amount))
+        .map(|opt_amount| {
+            let source = match opt_amount {
+                Some(_) => AmountSource::Provided,
+                None => AmountSource::Inferred
             };
-            (source, opt_instrument)
+            (source, opt_amount)
         })
         .parse_state(input)
 }
@@ -172,9 +171,9 @@ where I: Stream<Item=char> {
         char('P').skip(parser(whitespace)),
         parser(date).skip(parser(whitespace)),
         parser(symbol).skip(parser(whitespace)),
-        parser(instrument)
+        parser(amount)
     )
-        .map(|(_, date, symbol, instrument)| Price::new(date, symbol, instrument))
+        .map(|(_, date, symbol, amount)| Price::new(date, symbol, amount))
         .parse_state(input)
 }
 
@@ -255,11 +254,11 @@ fn posting<I>(input: State<I>) -> ParseResult<RawPosting, I>
 where I: Stream<Item=char> {
     (
         parser(account).skip(optional(parser(whitespace))),
-        parser(instrument_or_inferred).skip(optional(parser(whitespace))),
+        parser(amount_or_inferred).skip(optional(parser(whitespace))),
         optional(parser(comment))
     )
-        .map(|(sub_accounts, (instrument_source, opt_instrument), opt_comment)|
-            RawPosting::new(sub_accounts, opt_instrument, instrument_source, opt_comment))
+        .map(|(sub_accounts, (amount_source, opt_amount), opt_comment)|
+            RawPosting::new(sub_accounts, opt_amount, amount_source, opt_comment))
         .parse_state(input)
 }
 
@@ -343,16 +342,16 @@ pub fn parse_ledger(file_path: &str) -> Vec<ParseTree> {
 
 #[cfg(test)]
 mod tests {
-    use super::{account, amount, code, comment, comment_line, skip_comment_or_empty_lines,
-        instrument, instrument_amount_then_symbol, instrument_or_inferred,
-        instrument_symbol_then_amount, date, header, ledger, line_ending, payee, posting,
-        posting_line, price, price_db, quoted_symbol, status, sub_account, symbol, transaction,
-        two_digits, two_digits_to_u32, unquoted_symbol, whitespace};
+    use super::{account, amount, amount_quantity_then_symbol, amount_or_inferred,
+        amount_symbol_then_quantity, code, comment, comment_line, skip_comment_or_empty_lines,
+        date, header, ledger, line_ending, payee, posting, posting_line, price, price_db, quantity,
+        quoted_symbol, status, sub_account, symbol, transaction, two_digits, two_digits_to_u32,
+        unquoted_symbol, whitespace};
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
     use combine::{Parser};
-    use core::instrument::*;
+    use core::amount::*;
     use core::price::*;
     use core::symbol::*;
     use core::transaction::*;
@@ -422,33 +421,33 @@ mod tests {
     }
 
     #[test]
-    fn amount_negative_no_fractional_part()
+    fn quantity_negative_no_fractional_part()
     {
-        let result = parser(amount)
+        let result = parser(quantity)
             .parse("-1110").map(|x| x.0);
         assert_eq!(result, Ok(d128!(-1110)));
     }
 
     #[test]
-    fn amount_positive_no_fractional_part()
+    fn quantity_positive_no_fractional_part()
     {
-        let result = parser(amount)
+        let result = parser(quantity)
             .parse("2,314").map(|x| x.0);
         assert_eq!(result, Ok(d128!(2314)));
     }
 
     #[test]
-    fn amount_negative_with_fractional_part()
+    fn quantity_negative_with_fractional_part()
     {
-        let result = parser(amount)
+        let result = parser(quantity)
             .parse("-1,110.38").map(|x| x.0);
         assert_eq!(result, Ok(d128!(-1110.38)));
     }
 
     #[test]
-    fn amount_positive_with_fractional_part()
+    fn quantity_positive_with_fractional_part()
     {
-        let result = parser(amount)
+        let result = parser(quantity)
             .parse("24521.793").map(|x| x.0);
         assert_eq!(result, Ok(d128!(24521.793)));
     }
@@ -496,80 +495,80 @@ mod tests {
     }
 
     #[test]
-    fn instrument_symbol_then_amount_no_whitespace() {
-        let result = parser(instrument_symbol_then_amount)
+    fn amount_symbol_then_quantity_no_whitespace() {
+        let result = parser(amount_symbol_then_quantity)
             .parse("$13,245.00").map(|x| x.0);
-        assert_eq!(result, Ok(Instrument::new(
+        assert_eq!(result, Ok(Amount::new(
             d128!(13245.00),
             Symbol::new("$", QuoteOption::Unquoted),
             RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))));
     }
 
     #[test]
-    fn instrument_symbol_then_amount_with_whitespace() {
-        let result = parser(instrument_symbol_then_amount)
+    fn amount_symbol_then_quantity_with_whitespace() {
+        let result = parser(amount_symbol_then_quantity)
             .parse("$ 13,245.00").map(|x| x.0);
-        assert_eq!(result, Ok(Instrument::new(
+        assert_eq!(result, Ok(Amount::new(
             d128!(13245.00),
             Symbol::new("$", QuoteOption::Unquoted),
             RenderOptions::new(SymbolPosition::Left, Spacing::Space))));
     }
 
     #[test]
-    fn instrument_amount_then_symbol_no_whitespace() {
-        let result = parser(instrument_amount_then_symbol)
+    fn amount_quantity_then_symbol_no_whitespace() {
+        let result = parser(amount_quantity_then_symbol)
             .parse("13,245.463AAPL").map(|x| x.0);
-        assert_eq!(result, Ok(Instrument::new(
+        assert_eq!(result, Ok(Amount::new(
             d128!(13245.463),
             Symbol::new("AAPL", QuoteOption::Unquoted),
             RenderOptions::new(SymbolPosition::Right, Spacing::NoSpace))));
     }
 
     #[test]
-    fn instrument_amount_then_symbol_with_whitespace() {
-        let result = parser(instrument_amount_then_symbol)
+    fn amount_quantity_then_symbol_with_whitespace() {
+        let result = parser(amount_quantity_then_symbol)
             .parse("13,245.463 \"MUTF2351\"").map(|x| x.0);
-        assert_eq!(result, Ok(Instrument::new(
+        assert_eq!(result, Ok(Amount::new(
             d128!(13245.463),
             Symbol::new("MUTF2351", QuoteOption::Quoted),
             RenderOptions::new(SymbolPosition::Right, Spacing::Space))));
     }
 
     #[test]
-    fn instrument_test_symbol_then_amount() {
-        let result = parser(instrument)
+    fn amount_test_symbol_then_quantity() {
+        let result = parser(amount)
             .parse("$13,245.46").map(|x| x.0);
-        assert_eq!(result, Ok(Instrument::new(
+        assert_eq!(result, Ok(Amount::new(
             d128!(13245.46),
             Symbol::new("$", QuoteOption::Unquoted),
             RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))));
     }
 
     #[test]
-    fn instrument_test_amount_then_symbol() {
-        let result = parser(instrument)
+    fn amount_test_quantity_then_symbol() {
+        let result = parser(amount)
             .parse("13,245.463 \"MUTF2351\"").map(|x| x.0);
-        assert_eq!(result, Ok(Instrument::new(
+        assert_eq!(result, Ok(Amount::new(
             d128!(13245.463),
             Symbol::new("MUTF2351", QuoteOption::Quoted),
             RenderOptions::new(SymbolPosition::Right, Spacing::Space))));
     }
 
     #[test]
-    fn instrument_or_inferred_instrument_provided() {
-        let result = parser(instrument_or_inferred)
+    fn amount_or_inferred_amount_provided() {
+        let result = parser(amount_or_inferred)
             .parse("$13,245.46").map(|x| x.0);
-        assert_eq!(result, Ok((InstrumentSource::Provided, Some(Instrument::new(
+        assert_eq!(result, Ok((AmountSource::Provided, Some(Amount::new(
             d128!(13245.46),
             Symbol::new("$", QuoteOption::Unquoted),
             RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))))));
     }
 
     #[test]
-    fn instrument_or_inferred_no_instrument() {
-        let result = parser(instrument_or_inferred)
+    fn amount_or_inferred_no_amount() {
+        let result = parser(amount_or_inferred)
             .parse("").map(|x| x.0);
-        assert_eq!(result, Ok((InstrumentSource::Inferred, None)));
+        assert_eq!(result, Ok((AmountSource::Inferred, None)));
     }
 
     #[test]
@@ -579,7 +578,7 @@ mod tests {
         assert_eq!(result, Ok(Price::new(
             Local.ymd(2015, 10, 25),
             Symbol::new("MUTF2351", QuoteOption::Quoted),
-            Instrument::new(
+            Amount::new(
                 d128!(5.42),
                 Symbol::new("$", QuoteOption::Unquoted),
                 RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)))));
@@ -600,7 +599,7 @@ mod tests {
             Price::new(
                 Local.ymd(2015, 10, 25),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
-                Instrument::new(
+                Amount::new(
                     d128!(5.42),
                     Symbol::new("$", QuoteOption::Unquoted),
                     RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)))
@@ -619,21 +618,21 @@ mod tests {
             Price::new(
                 Local.ymd(2015, 10, 23),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
-                Instrument::new(
+                Amount::new(
                     d128!(5.42),
                     Symbol::new("$", QuoteOption::Unquoted),
                     RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
             Price::new(
                 Local.ymd(2015, 10, 25),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
-                Instrument::new(
+                Amount::new(
                     d128!(5.98),
                     Symbol::new("$", QuoteOption::Unquoted),
                     RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
             Price::new(
                 Local.ymd(2015, 10, 25),
                 Symbol::new("AAPL", QuoteOption::Unquoted),
-                Instrument::new(
+                Amount::new(
                     d128!(313.38),
                     Symbol::new("$", QuoteOption::Unquoted),
                     RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)))
@@ -828,16 +827,16 @@ mod tests {
                 "Assets".to_string(),
                 "Savings".to_string()
             ],
-            Some(Instrument::new(
+            Some(Amount::new(
                 d128!(45.00),
                 Symbol::new("$".to_string(), QuoteOption::Unquoted),
                 RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
-            InstrumentSource::Provided,
+            AmountSource::Provided,
             Some("comment".to_string()))));
     }
 
     #[test]
-    fn posting_with_all_components_alternate_instrument() {
+    fn posting_with_all_components_alternate_amount() {
         let result = parser(posting)
             .parse("Assets:Investments\t13.508 \"MUTF2351\"\t;comment").map(|x| x.0);
         assert_eq!(result, Ok(RawPosting::new(
@@ -845,16 +844,16 @@ mod tests {
                 "Assets".to_string(),
                 "Investments".to_string()
             ],
-            Some(Instrument::new(
+            Some(Amount::new(
                 d128!(13.508),
                 Symbol::new("MUTF2351".to_string(), QuoteOption::Quoted),
                 RenderOptions::new(SymbolPosition::Right, Spacing::Space))),
-            InstrumentSource::Provided,
+            AmountSource::Provided,
             Some("comment".to_string()))));
     }
 
     #[test]
-    fn posting_with_instrument_no_comment() {
+    fn posting_with_amount_no_comment() {
         let result = parser(posting)
             .parse("Assets:Savings\t$45.00").map(|x| x.0);
         assert_eq!(result, Ok(RawPosting::new(
@@ -862,16 +861,16 @@ mod tests {
                 "Assets".to_string(),
                 "Savings".to_string()
             ],
-            Some(Instrument::new(
+            Some(Amount::new(
                 d128!(45.00),
                 Symbol::new("$".to_string(), QuoteOption::Unquoted),
                 RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
-            InstrumentSource::Provided,
+            AmountSource::Provided,
             None)));
     }
 
     #[test]
-    fn posting_inferred_instrument_with_comment() {
+    fn posting_inferred_amount_with_comment() {
         let result = parser(posting)
             .parse("Assets:Savings\t;comment").map(|x| x.0);
         assert_eq!(result, Ok(RawPosting::new(
@@ -880,12 +879,12 @@ mod tests {
                 "Savings".to_string()
             ],
             None,
-            InstrumentSource::Inferred,
+            AmountSource::Inferred,
             Some("comment".to_string()))));
     }
 
     #[test]
-    fn posting_inferred_instrument_no_comment() {
+    fn posting_inferred_amount_no_comment() {
         let result = parser(posting)
             .parse("Assets:Savings").map(|x| x.0);
         assert_eq!(result, Ok(RawPosting::new(
@@ -894,7 +893,7 @@ mod tests {
                 "Savings".to_string()
             ],
             None,
-            InstrumentSource::Inferred,
+            AmountSource::Inferred,
             None)));
     }
 
@@ -908,7 +907,7 @@ mod tests {
                 "Savings".to_string()
             ],
             None,
-            InstrumentSource::Inferred,
+            AmountSource::Inferred,
             None)));
     }
 
@@ -922,7 +921,7 @@ mod tests {
                 "Savings".to_string()
             ],
             None,
-            InstrumentSource::Inferred,
+            AmountSource::Inferred,
             None)));
     }
 
@@ -947,11 +946,11 @@ mod tests {
                         "Expenses".to_string(),
                         "Groceries".to_string(),
                     ],
-                    Some(Instrument::new(
+                    Some(Amount::new(
                         d128!(45.00),
                         Symbol::new("$".to_string(), QuoteOption::Unquoted),
                         RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
-                    InstrumentSource::Provided,
+                    AmountSource::Provided,
                     None),
                 RawPosting::new(
                     vec![
@@ -959,7 +958,7 @@ mod tests {
                         "Credit".to_string(),
                     ],
                     None,
-                    InstrumentSource::Inferred,
+                    AmountSource::Inferred,
                     None)
             ]
         )));
@@ -987,11 +986,11 @@ mod tests {
                         "Expenses".to_string(),
                         "Groceries".to_string(),
                     ],
-                    Some(Instrument::new(
+                    Some(Amount::new(
                         d128!(45.00),
                         Symbol::new("$".to_string(), QuoteOption::Unquoted),
                         RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))),
-                    InstrumentSource::Provided,
+                    AmountSource::Provided,
                     None),
                 RawPosting::new(
                     vec![
@@ -999,7 +998,7 @@ mod tests {
                         "Credit".to_string(),
                     ],
                     None,
-                    InstrumentSource::Inferred,
+                    AmountSource::Inferred,
                     None)
             ]
         )));

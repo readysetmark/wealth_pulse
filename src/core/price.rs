@@ -1,29 +1,29 @@
 use chrono::date::Date;
 use chrono::offset::local::Local;
 use std::fmt;
-use super::instrument::Instrument;
+use super::amount::Amount;
 use super::symbol::Symbol;
 
 #[derive(PartialEq, Debug)]
 pub struct Price {
     date: Date<Local>,
     symbol: Symbol,
-    instrument: Instrument,
+    amount: Amount,
 }
 
 impl Price {
-    pub fn new(date: Date<Local>, symbol: Symbol, instrument: Instrument) -> Price {
+    pub fn new(date: Date<Local>, symbol: Symbol, amount: Amount) -> Price {
         Price {
             date: date,
             symbol: symbol,
-            instrument: instrument,
+            amount: amount,
         }
     }
 }
 
 impl fmt::Display for Price {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "P {} {} {}", self.date.format("%Y-%m-%d"), self.symbol, self.instrument)
+        write!(f, "P {} {} {}", self.date.format("%Y-%m-%d"), self.symbol, self.amount)
     }
 }
 
@@ -31,7 +31,7 @@ impl fmt::Display for Price {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::instrument::*;
+    use core::amount::*;
     use core::symbol::*;
     use chrono::offset::local::Local;
     use chrono::offset::TimeZone;
@@ -41,7 +41,7 @@ mod tests {
         let result = format!("{}", Price::new(
                 Local.ymd(2016, 2, 7),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
-                Instrument::new(
+                Amount::new(
                     d128!(5.42),
                     Symbol::new("$", QuoteOption::Unquoted),
                     RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace))));

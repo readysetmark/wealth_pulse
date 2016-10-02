@@ -1,9 +1,9 @@
-use core::instrument::*;
+use core::amount::*;
 use core::price::Price;
 use core::transaction::*;
 
 #[derive(PartialEq, Debug)]
-pub enum InstrumentSource {
+pub enum AmountSource {
     Provided,
     Inferred,
 }
@@ -12,19 +12,19 @@ pub enum InstrumentSource {
 pub struct RawPosting {
     full_account: String,
     sub_accounts: Vec<String>,
-    instrument: Option<Instrument>,
-    instrument_source: InstrumentSource,
+    amount: Option<Amount>,
+    amount_source: AmountSource,
     comment: Option<String>,
 }
 
 impl RawPosting {
-    pub fn new(sub_accounts: Vec<String>, instrument: Option<Instrument>,
-    instrument_source: InstrumentSource, comment: Option<String>) -> RawPosting {
+    pub fn new(sub_accounts: Vec<String>, amount: Option<Amount>,
+    amount_source: AmountSource, comment: Option<String>) -> RawPosting {
         RawPosting {
             full_account: sub_accounts.join(":"),
             sub_accounts: sub_accounts,
-            instrument: instrument,
-            instrument_source: instrument_source,
+            amount: amount,
+            amount_source: amount_source,
             comment: comment
         }
     }

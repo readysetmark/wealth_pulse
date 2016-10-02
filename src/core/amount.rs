@@ -31,23 +31,23 @@ impl RenderOptions {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Instrument {
-    amount: d128,
+pub struct Amount {
+    quantity: d128,
     symbol: Symbol,
     render_options: RenderOptions,
 }
 
-impl Instrument {
-    pub fn new(amount: d128, symbol: Symbol, render_opts: RenderOptions) -> Instrument {
-        Instrument {
-            amount: amount,
+impl Amount {
+    pub fn new(quantity: d128, symbol: Symbol, render_opts: RenderOptions) -> Amount {
+        Amount {
+            quantity: quantity,
             symbol: symbol,
             render_options: render_opts,
         }
     }
 }
 
-impl fmt::Display for Instrument {
+impl fmt::Display for Amount {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let spacing =
             match self.render_options.spacing {
@@ -56,8 +56,8 @@ impl fmt::Display for Instrument {
             };
 
         match self.render_options.symbol_position {
-            SymbolPosition::Left => write!(f, "{}{}{}", self.symbol, spacing, self.amount),
-            SymbolPosition::Right => write!(f, "{}{}{}", self.amount, spacing, self.symbol),
+            SymbolPosition::Left => write!(f, "{}{}{}", self.symbol, spacing, self.quantity),
+            SymbolPosition::Right => write!(f, "{}{}{}", self.quantity, spacing, self.symbol),
         }
     }
 }
@@ -69,8 +69,8 @@ mod tests {
     use core::symbol::*;
 
     #[test]
-    fn instrument_fmt_symbol_left_with_space() {
-        let result = format!("{}", Instrument::new(
+    fn amount_fmt_symbol_left_with_space() {
+        let result = format!("{}", Amount::new(
             d128!(13245.00),
             Symbol::new("US$", QuoteOption::Unquoted),
             RenderOptions::new(SymbolPosition::Left, Spacing::Space)));
@@ -78,8 +78,8 @@ mod tests {
     }
 
     #[test]
-    fn instrument_fmt_symbol_left_no_space() {
-        let result = format!("{}", Instrument::new(
+    fn amount_fmt_symbol_left_no_space() {
+        let result = format!("{}", Amount::new(
                 d128!(13245.00),
                 Symbol::new("$", QuoteOption::Unquoted),
                 RenderOptions::new(SymbolPosition::Left, Spacing::NoSpace)));
@@ -87,8 +87,8 @@ mod tests {
     }
 
     #[test]
-    fn instrument_fmt_symbol_right_with_space() {
-        let result = format!("{}", Instrument::new(
+    fn amount_fmt_symbol_right_with_space() {
+        let result = format!("{}", Amount::new(
                 d128!(13245.463),
                 Symbol::new("MUTF2351", QuoteOption::Quoted),
                 RenderOptions::new(SymbolPosition::Right, Spacing::Space)));
@@ -96,8 +96,8 @@ mod tests {
     }
 
     #[test]
-    fn instrument_fmt_symbol_right_no_space() {
-        let result = format!("{}", Instrument::new(
+    fn amount_fmt_symbol_right_no_space() {
+        let result = format!("{}", Amount::new(
                 d128!(13245.463),
                 Symbol::new("RUST", QuoteOption::Unquoted),
                 RenderOptions::new(SymbolPosition::Right, Spacing::NoSpace)));
