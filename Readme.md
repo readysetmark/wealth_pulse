@@ -38,11 +38,22 @@ Temporary section until I build this stuff out:
 
 * Transaction Header (Transaction)
 * Posting (Transaction entry line)
-* Commodity (has an amount and symbol)
+* Amount (has a quantity and symbol)
 
 
 Tasks
 -----
+
+### Types
+
+* [ ] Rework Amount & Symbol Types
+    - Amount should be quantity and symbol (and a formatter function/trait?)
+    - Symbol type doesn't actually need to exist as a record (just as an alias for string?)
+    - Have a separate type for determining how to format an amount based on its symbol
+* [ ] Implement add/subtract traits for Amount (maybe multiply and divide if necessary)
+* [ ] How do I want to handle converting from one symbol to another?
+
+
 
 ### Ledger Loading
 
@@ -51,6 +62,7 @@ Tasks
     * [ ] Autobalance transactions
     * [ ] Ensure all transactions balance
     * [ ] Transform transactions into list of postings
+    * [ ] Obtain list of prices
 * [ ] Collect ledger stats:
     * [ ] Last modified date/time
     * [ ] Number of transactions

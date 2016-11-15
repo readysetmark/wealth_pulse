@@ -332,6 +332,7 @@ pub fn parse_ledger(file_path: &str) -> Vec<ParseTree> {
 
     let result = parser(ledger).parse(&contents[..]);
 
+    // TODO: Should return result value rather than panic here
     match result {
         Ok((tree, _)) => tree,
         Err(err) => panic!("{}", err),
