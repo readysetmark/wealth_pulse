@@ -2,10 +2,11 @@ use rust_core::str::FromStr;
 use chrono::date::Date;
 use chrono::offset::local::Local;
 use chrono::offset::TimeZone;
-use combine::{alpha_num, between, char, crlf, digit, many, many1, newline, optional, parser,
-    satisfy, sep_by1, sep_end_by, skip_many, try, Parser, ParserExt, ParseResult};
+use combine::{between, many, many1, optional, parser, satisfy, sep_by1, sep_end_by, skip_many, try,
+    Parser, ParseResult};
+use combine::char::{alpha_num, char, crlf, digit, newline};
 use combine::combinator::FnParser;
-use combine::primitives::{State, Stream};
+use combine::primitives::{Stream};
 use decimal::d128;
 use std::fs::File;
 use std::io::Read;
@@ -31,43 +32,43 @@ fn two_digits_to_u32((x, y): (char, char)) -> u32 {
 // PARSERS
 
 /// Parses at least one whitespace character (space or tab).
-fn whitespace<I>(input: State<I>) -> ParseResult<String, I>
+fn whitespace<I>(input: I) -> ParseResult<String, I>
 where I: Stream<Item=char> {
     many1::<String, _>(satisfy(|c| c == ' ' || c == '\t'))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses a Unix or Windows style line endings
-fn line_ending<I>(input: State<I>) -> ParseResult<String, I>
+fn line_ending<I>(input: I) -> ParseResult<String, I>
 where I: Stream<Item=char> {
     crlf().map(|x: char| x.to_string())
         .or(newline().map(|x: char| x.to_string()))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Wrapped parser for parsing two digits. e.g. 17
-fn two_digits<I>() -> FnParser<I, fn (State<I>) -> ParseResult<u32, I>>
+fn two_digits<I>() -> FnParser<I, fn (I) -> ParseResult<u32, I>>
 where I: Stream<Item=char> {
-    fn two_digits_<I>(input: State<I>) -> ParseResult<u32, I>
+    fn two_digits_<I>(input: I) -> ParseResult<u32, I>
     where I: Stream<Item=char> {
         (digit(), digit()).map(two_digits_to_u32)
-            .parse_state(input)
+            .parse_stream(input)
     }
     parser(two_digits_)
 }
 
 /// Parses a date. e.g. 2015-10-17
-fn date<I>(input: State<I>) -> ParseResult<Date<Local>, I>
+fn date<I>(input: I) -> ParseResult<Date<Local>, I>
 where I: Stream<Item=char> {
     (many::<String, _>(digit()), char('-'), two_digits(), char('-'), two_digits())
         .map(|(year, _, month, _, day)| {
             Local.ymd(year.parse().unwrap(), month, day)
         })
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses a quantity
-fn quantity<I>(input: State<I>) -> ParseResult<d128,I>
+fn quantity<I>(input: I) -> ParseResult<d128,I>
 where I: Stream<Item=char> {
     (
         optional(char('-')).map(|x| {
@@ -85,35 +86,35 @@ where I: Stream<Item=char> {
             qty = qty.replace(",", "");
             d128::from_str(&qty[..]).unwrap()
         })
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses a quoted symbol
-fn quoted_symbol<I>(input: State<I>) -> ParseResult<Symbol, I>
+fn quoted_symbol<I>(input: I) -> ParseResult<Symbol, I>
 where I: Stream<Item=char> {
     (char('\"'), many1::<String, _>(satisfy(|c| c != '\"' && c != '\r' && c != '\n')), char('\"'))
         .map(|(_, symbol, _)| Symbol::new(symbol, QuoteOption::Quoted))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses an unquoted symbol
-fn unquoted_symbol<I>(input: State<I>) -> ParseResult<Symbol, I>
+fn unquoted_symbol<I>(input: I) -> ParseResult<Symbol, I>
 where I: Stream<Item=char> {
     many1::<String, _>(satisfy(|c| "-0123456789; \"\t\r\n".chars().all(|s| s != c)))
         .map(|symbol| Symbol::new(symbol, QuoteOption::Unquoted))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses a quoted or unquoted symbol
-fn symbol<I>(input: State<I>) -> ParseResult<Symbol, I>
+fn symbol<I>(input: I) -> ParseResult<Symbol, I>
 where I: Stream<Item=char> {
     parser(quoted_symbol)
         .or(parser(unquoted_symbol))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses an amount in the format of symbol then quantity.
-fn amount_symbol_then_quantity<I>(input: State<I>) -> ParseResult<Amount, I>
+fn amount_symbol_then_quantity<I>(input: I) -> ParseResult<Amount, I>
 where I: Stream<Item=char> {
     (parser(symbol), optional(parser(whitespace)), parser(quantity))
         .map(|(symbol, opt_whitespace, quantity)| {
@@ -124,11 +125,11 @@ where I: Stream<Item=char> {
             let render_opts = RenderOptions::new(SymbolPosition::Left, spacing);
             Amount::new(quantity, symbol, render_opts)
         })
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses an amount in the format of quantity then symbol.
-fn amount_quantity_then_symbol<I>(input: State<I>) -> ParseResult<Amount, I>
+fn amount_quantity_then_symbol<I>(input: I) -> ParseResult<Amount, I>
 where I: Stream<Item=char> {
     (parser(quantity), optional(parser(whitespace)), parser(symbol))
         .map(|(quantity, opt_whitespace, symbol)| {
@@ -139,19 +140,19 @@ where I: Stream<Item=char> {
             let render_opts = RenderOptions::new(SymbolPosition::Right, spacing);
             Amount::new(quantity, symbol, render_opts)
         })
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses an amount
-fn amount<I>(input: State<I>) -> ParseResult<Amount, I>
+fn amount<I>(input: I) -> ParseResult<Amount, I>
 where I: Stream<Item=char> {
     parser(amount_symbol_then_quantity)
         .or(parser(amount_quantity_then_symbol))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses an amount or an inferred amount
-fn amount_or_inferred<I>(input: State<I>) -> ParseResult<(AmountSource, Option<Amount>), I>
+fn amount_or_inferred<I>(input: I) -> ParseResult<(AmountSource, Option<Amount>), I>
 where I: Stream<Item=char> {
     optional(parser(amount))
         .map(|opt_amount| {
@@ -161,11 +162,11 @@ where I: Stream<Item=char> {
             };
             (source, opt_amount)
         })
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses a price entry
-fn price<I>(input: State<I>) -> ParseResult<Price, I>
+fn price<I>(input: I) -> ParseResult<Price, I>
 where I: Stream<Item=char> {
     (
         char('P').skip(parser(whitespace)),
@@ -174,54 +175,54 @@ where I: Stream<Item=char> {
         parser(amount)
     )
         .map(|(_, date, symbol, amount)| Price::new(date, symbol, amount))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses a price DB file, which contains only price entries.
-fn price_db<I>(input: State<I>) -> ParseResult<Vec<Price>, I>
+fn price_db<I>(input: I) -> ParseResult<Vec<Price>, I>
 where I: Stream<Item=char> {
     sep_end_by(parser(price), parser(line_ending))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses transaction status token. e.g. * (cleared) or ! (uncleared)
-fn status<I>(input: State<I>) -> ParseResult<Status, I>
+fn status<I>(input: I) -> ParseResult<Status, I>
 where I: Stream<Item=char> {
     char('*').map(|_| Status::Cleared)
         .or(char('!').map(|_| Status::Uncleared))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses transaction code. e.g. (cheque #802)
-fn code<I>(input: State<I>) -> ParseResult<String, I>
+fn code<I>(input: I) -> ParseResult<String, I>
 where I: Stream<Item=char> {
     between(char('('), char(')'), many(satisfy(|c| c != '\r' && c != '\n' && c != ')')))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses a payee.
-fn payee<I>(input: State<I>) -> ParseResult<String,I>
+fn payee<I>(input: I) -> ParseResult<String,I>
 where I: Stream<Item=char> {
     many1(satisfy(|c| c != ';' && c != '\n' && c != '\r'))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses a comment.
-fn comment<I>(input: State<I>) -> ParseResult<String,I>
+fn comment<I>(input: I) -> ParseResult<String,I>
 where I: Stream<Item=char> {
     char(';').with(many(satisfy(|c| c != '\r' && c != '\n')))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 // Parses a comment line, which may start with whitespace.
-fn comment_line<I>(input: State<I>) -> ParseResult<String,I>
+fn comment_line<I>(input: I) -> ParseResult<String,I>
 where I: Stream<Item=char> {
     many::<String, _>(parser(whitespace)).with(parser(comment)).skip(parser(line_ending))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses a transaction header.
-fn header<I>(input: State<I>) -> ParseResult<Header,I>
+fn header<I>(input: I) -> ParseResult<Header,I>
 where I: Stream<Item=char> {
     (
         parser(date).skip(parser(whitespace)),
@@ -232,25 +233,25 @@ where I: Stream<Item=char> {
     )
         .map(|(date, status, code, payee, comment)|
             Header::new(date, status, code, payee, comment))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses a sub-account name, which must be alphanumeric.
-fn sub_account<I>(input: State<I>) -> ParseResult<String,I>
+fn sub_account<I>(input: I) -> ParseResult<String,I>
 where I: Stream<Item=char> {
     many1(alpha_num())
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses an account, made up of sub-accounts separated by colons.
-fn account<I>(input: State<I>) -> ParseResult<Vec<String>,I>
+fn account<I>(input: I) -> ParseResult<Vec<String>,I>
 where I: Stream<Item=char> {
     sep_by1(parser(sub_account), char(':'))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses a transaction posting.
-fn posting<I>(input: State<I>) -> ParseResult<RawPosting, I>
+fn posting<I>(input: I) -> ParseResult<RawPosting, I>
 where I: Stream<Item=char> {
     (
         parser(account).skip(optional(parser(whitespace))),
@@ -259,18 +260,18 @@ where I: Stream<Item=char> {
     )
         .map(|(sub_accounts, (amount_source, opt_amount), opt_comment)|
             RawPosting::new(sub_accounts, opt_amount, amount_source, opt_comment))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses a transaction posting line, which must begin with whitespace.
-fn posting_line<I>(input: State<I>) -> ParseResult<RawPosting, I>
+fn posting_line<I>(input: I) -> ParseResult<RawPosting, I>
 where I: Stream<Item=char> {
     many1::<String, _>(parser(whitespace)).with(parser(posting)).skip(parser(line_ending))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses a whole transaction.
-fn transaction<I>(input: State<I>) -> ParseResult<ParseTree, I>
+fn transaction<I>(input: I) -> ParseResult<ParseTree, I>
 where I: Stream<Item=char> {
     (
         parser(header).skip(parser(line_ending)),
@@ -281,20 +282,20 @@ where I: Stream<Item=char> {
             let raw_postings = postings.into_iter().filter_map(|p| p).collect();
             ParseTree::Transaction(header, raw_postings)
         })
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses and discards any number of comment or empty line.
-fn skip_comment_or_empty_lines<I>(input: State<I>) -> ParseResult<(), I>
+fn skip_comment_or_empty_lines<I>(input: I) -> ParseResult<(), I>
 where I: Stream<Item=char> {
     skip_many(skip_many(parser(whitespace))
             .skip(optional(parser(comment)))
             .skip(parser(line_ending)))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 /// Parses a complete ledger, extracting transactions and prices.
-fn ledger<I>(input: State<I>) -> ParseResult<Vec<ParseTree>, I>
+fn ledger<I>(input: I) -> ParseResult<Vec<ParseTree>, I>
 where I: Stream<Item=char> {
     // skip one or more comment or empty lines
     // parse transactions or prices separated, which may be separated bycomment or empty lines
@@ -303,7 +304,7 @@ where I: Stream<Item=char> {
             parser(transaction)
                 .or(parser(price).map(|p| ParseTree::Price(p)))
                 .skip(parser(skip_comment_or_empty_lines))))
-        .parse_state(input)
+        .parse_stream(input)
 }
 
 
