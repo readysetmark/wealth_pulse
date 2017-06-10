@@ -1,7 +1,6 @@
 extern crate wealth_pulse;
 
-//use wealth_pulse::parser::chomp::{parse_pricedb};
-use wealth_pulse::parser::combine::{parse_pricedb, parse_ledger};
+use wealth_pulse::parser::parse::{parse_ledger, parse_pricedb};
 use std::env;
 
 // MAIN

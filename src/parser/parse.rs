@@ -14,7 +14,7 @@ use core::amount::*;
 use core::price::*;
 use core::symbol::*;
 use core::transaction::*;
-use parser::types::*;
+use parser::ast::*;
 
 
 
@@ -357,7 +357,7 @@ mod tests {
     use core::price::*;
     use core::symbol::*;
     use core::transaction::*;
-    use parser::types::*;
+    use parser::ast::*;
 
     // HELPERS
 
