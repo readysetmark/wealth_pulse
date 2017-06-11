@@ -31,7 +31,23 @@ impl RawPosting {
 }
 
 #[derive(PartialEq, Debug)]
+pub struct RawTransaction {
+    header: Header,
+    postings: Vec<RawPosting>
+}
+
+impl RawTransaction {
+    pub fn new(header: Header, postings: Vec<RawPosting>) -> RawTransaction {
+        RawTransaction {
+            header: header,
+            postings: postings
+        }
+    }
+}
+
+
+#[derive(PartialEq, Debug)]
 pub enum ParseTree {
     Price(Price),
-    Transaction(Header, Vec<RawPosting>),
+    Transaction(RawTransaction),
 }

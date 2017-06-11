@@ -280,7 +280,8 @@ where I: Stream<Item=char> {
     )
         .map(|(header, postings) : (Header, Vec<Option<RawPosting>>)| {
             let raw_postings = postings.into_iter().filter_map(|p| p).collect();
-            ParseTree::Transaction(header, raw_postings)
+            let raw_transaction = RawTransaction::new(header, raw_postings);
+            ParseTree::Transaction(raw_transaction)
         })
         .parse_stream(input)
 }
@@ -319,6 +320,7 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
 
     let result = parser(price_db).parse(&contents[..]);
 
+    // TODO: Should return result value rather than panic here
     match result {
         Ok((prices, _)) => prices,
         Err(err) => panic!("{}", err),
@@ -935,7 +937,7 @@ mod tests {
                 \tExpenses:Groceries    $45.00\n\
                 \tLiabilities:Credit\n\
             ").map(|x| x.0);
-        assert_eq!(result, Ok(ParseTree::Transaction(
+        assert_eq!(result, Ok(ParseTree::Transaction(RawTransaction::new(
             Header::new(
                 Local.ymd(2016, 6, 7),
                 Status::Cleared,
@@ -963,7 +965,7 @@ mod tests {
                     AmountSource::Inferred,
                     None)
             ]
-        )));
+        ))));
     }
 
     #[test]
@@ -975,7 +977,7 @@ mod tests {
                 \tExpenses:Groceries    $45.00\n\
                 \tLiabilities:Credit\n\
             ").map(|x| x.0);
-        assert_eq!(result, Ok(ParseTree::Transaction(
+        assert_eq!(result, Ok(ParseTree::Transaction(RawTransaction::new(
             Header::new(
                 Local.ymd(2016, 6, 7),
                 Status::Cleared,
@@ -1003,7 +1005,7 @@ mod tests {
                     AmountSource::Inferred,
                     None)
             ]
-        )));
+        ))));
     }
 
     #[test]
