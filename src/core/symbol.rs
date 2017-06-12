@@ -1,15 +1,15 @@
 use std::fmt;
 
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum QuoteOption {
     Quoted,
     Unquoted,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Symbol {
-    value: String,
+    pub value: String,
     quote_option: QuoteOption,
 }
 

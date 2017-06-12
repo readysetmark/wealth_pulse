@@ -46,11 +46,12 @@ Tasks
 
 ### Types
 
+* [ ] Posting
+* [ ] Implement add/subtract traits for Amount (maybe multiply and divide if necessary)
 * [ ] Rework Amount & Symbol Types
     - Amount should be quantity and symbol (and a formatter function/trait?)
     - Symbol type doesn't actually need to exist as a record (just as an alias for string?)
     - Have a separate type for determining how to format an amount based on its symbol
-* [ ] Implement add/subtract traits for Amount (maybe multiply and divide if necessary)
 * [ ] How do I want to handle converting from one symbol to another?
 
 

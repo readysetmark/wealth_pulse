@@ -3,19 +3,19 @@ use std::fmt;
 use super::symbol::Symbol;
 
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum SymbolPosition {
     Left,
     Right,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Spacing {
     Space,
     NoSpace,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct RenderOptions {
     symbol_position: SymbolPosition,
     spacing: Spacing,
@@ -30,11 +30,11 @@ impl RenderOptions {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Amount {
-    quantity: d128,
-    symbol: Symbol,
-    render_options: RenderOptions,
+    pub quantity: d128,
+    pub symbol: Symbol,
+    pub render_options: RenderOptions,
 }
 
 impl Amount {
