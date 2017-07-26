@@ -1,5 +1,5 @@
-use chrono::date::Date;
-use chrono::offset::local::Local;
+use chrono::Date;
+use chrono::offset::Local;
 use std::fmt;
 use super::amount::Amount;
 use super::symbol::Symbol;
@@ -33,7 +33,7 @@ mod tests {
     use super::*;
     use core::amount::*;
     use core::symbol::*;
-    use chrono::offset::local::Local;
+    use chrono::offset::Local;
     use chrono::offset::TimeZone;
 
     #[test]

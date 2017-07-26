@@ -1,5 +1,5 @@
-use chrono::date::Date;
-use chrono::offset::local::Local;
+use chrono::Date;
+use chrono::offset::Local;
 
 #[derive(PartialEq, Debug)]
 pub enum Status {

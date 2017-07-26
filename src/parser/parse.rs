@@ -1,6 +1,6 @@
 use rust_core::str::FromStr;
-use chrono::date::Date;
-use chrono::offset::local::Local;
+use chrono::Date;
+use chrono::offset::Local;
 use chrono::offset::TimeZone;
 use combine::{between, many, many1, optional, parser, satisfy, sep_by1, sep_end_by, skip_many, try,
     Parser, ParseResult};
@@ -349,7 +349,7 @@ mod tests {
         date, header, ledger, line_ending, payee, posting, posting_line, price, price_db, quantity,
         quoted_symbol, status, sub_account, symbol, transaction, two_digits, two_digits_to_u32,
         unquoted_symbol, whitespace};
-    use chrono::offset::local::Local;
+    use chrono::offset::Local;
     use chrono::offset::TimeZone;
     use combine::{parser};
     use combine::{Parser};
