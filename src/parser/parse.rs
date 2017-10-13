@@ -11,9 +11,10 @@ use decimal::d128;
 use std::fs::File;
 use std::io::Read;
 use core::amount::*;
+use core::posting::AmountSource;
 use core::price::*;
 use core::symbol::*;
-use core::transaction::*;
+use core::header::*;
 use parser::ast::*;
 
 
@@ -356,9 +357,10 @@ mod tests {
     use combine::{parser};
     use combine::{Parser};
     use core::amount::*;
+    use core::posting::AmountSource;
     use core::price::*;
     use core::symbol::*;
-    use core::transaction::*;
+    use core::header::*;
     use parser::ast::*;
 
     // HELPERS

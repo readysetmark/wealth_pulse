@@ -1,15 +1,10 @@
 use core::amount::*;
+use core::posting::*;
 use core::price::Price;
-use core::transaction::*;
+use core::header::*;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::result::Result;
-
-#[derive(PartialEq, Debug)]
-pub enum AmountSource {
-    Provided,
-    Inferred,
-}
 
 #[derive(PartialEq, Debug)]
 pub struct RawPosting {
