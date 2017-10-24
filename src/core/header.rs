@@ -1,13 +1,13 @@
 use chrono::Date;
 use chrono::offset::Local;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Status {
     Cleared,
     Uncleared,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Header {
     date: Date<Local>,
     status: Status,
