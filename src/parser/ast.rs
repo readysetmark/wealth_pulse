@@ -153,38 +153,15 @@ fn into_postings(header: Header, raw_postings: Vec<RawPosting>) -> Vec<Posting> 
     let header = Rc::new(header);
 
     raw_postings.into_iter().map(|p| {
-        let account_lineage = build_account_lineage(&p.sub_accounts);
         Posting::new(
             header.clone(),
             p.full_account,
-            account_lineage,
+            &p.sub_accounts,
             p.amount.expect("Encountered unexpected missing amount"),
             p.amount_source,
             p.comment
         )
     }).collect()
-}
-
-/// Build a vector of full account names for all levels of accounts based on the
-/// `sub_accounts` provided.
-///
-/// e.g. Given ["Assets", "Savings", "Bank"] we should get back ["Assets",
-/// "Assets:Savings", "Assets:Savings:Bank"]
-fn build_account_lineage(sub_accounts: &Vec<String>) -> Vec<String> {
-    let mut account_lineage = Vec::new();
-    let mut account = String::new();
-
-    for sub_account in sub_accounts.iter() {
-        if account.len() == 0 {
-            account.push_str(sub_account);
-        } else {
-            account.push(':');
-            account.push_str(sub_account);
-        }
-        account_lineage.push(account.clone());
-    }
-
-    account_lineage
 }
 
 
@@ -496,7 +473,7 @@ mod tests {
             Posting::new(
                 expected_h.clone(),
                 "Expenses:Cash".to_string(),
-                vec!["Expenses".to_string(), "Expenses:Cash".to_string()],
+                &vec!["Expenses".to_string(), "Cash".to_string()],
                 Amount::new(
                     d128!(23.4),
                     Symbol::new("$", QuoteOption::Unquoted),
@@ -508,7 +485,7 @@ mod tests {
             Posting::new(
                 expected_h.clone(),
                 "Assets:Savings:Bank".to_string(),
-                vec!["Assets".to_string(), "Assets:Savings".to_string(), "Assets:Savings:Bank".to_string()],
+                &vec!["Assets".to_string(), "Savings".to_string(), "Bank".to_string()],
                 Amount::new(
                     d128!(-23.4),
                     Symbol::new("$", QuoteOption::Unquoted),
@@ -559,7 +536,7 @@ mod tests {
             Posting::new(
                 expected_h.clone(),
                 "Expenses:Cash".to_string(),
-                vec!["Expenses".to_string(), "Expenses:Cash".to_string()],
+                &vec!["Expenses".to_string(), "Cash".to_string()],
                 Amount::new(
                     d128!(23.4),
                     Symbol::new("$", QuoteOption::Unquoted),
@@ -571,7 +548,7 @@ mod tests {
             Posting::new(
                 expected_h.clone(),
                 "Assets:Savings:Bank".to_string(),
-                vec!["Assets".to_string(), "Assets:Savings".to_string(), "Assets:Savings:Bank".to_string()],
+                &vec!["Assets".to_string(), "Savings".to_string(), "Bank".to_string()],
                 Amount::new(
                     d128!(-23.4),
                     Symbol::new("$", QuoteOption::Unquoted),
@@ -583,12 +560,5 @@ mod tests {
         ];
         let result = into_postings(h, rp);
         assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn build_account_lineage_should_provide_full_account_name_for_all_levels() {
-        let sub_accounts = vec!["Assets".to_string(), "Savings".to_string(), "Bank".to_string()];
-        let expected = vec!["Assets", "Assets:Savings", "Assets:Savings:Bank"];
-        assert_eq!(build_account_lineage(&sub_accounts), expected);
     }
 }
