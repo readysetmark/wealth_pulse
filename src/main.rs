@@ -12,10 +12,14 @@ fn main() {
         .expect("Could not read LEDGER_FILE environment variable");
 
     let prices = parse_pricedb(&pricedb_filepath);
-    println!("Parsed {} prices", prices.len());
+    println!("Parsed pricedb file: {}", pricedb_filepath);
+    println!("  {} prices", prices.len());
 
-    let tree = parse_ledger(&ledger_filepath);
-    println!("Parsed {} tree items", tree.len());
+    let (num_txs, postings, prices) = parse_ledger(&ledger_filepath);
+    println!("Parsed ledger file: {}", ledger_filepath);
+    println!("  {} transactions", num_txs);
+    println!("  {} postings", postings.len());
+    println!("  {} prices", prices.len());
 
     // for price in &prices {
     //     println!("{}", price);

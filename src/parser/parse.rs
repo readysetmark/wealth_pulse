@@ -11,7 +11,7 @@ use decimal::d128;
 use std::fs::File;
 use std::io::Read;
 use core::amount::*;
-use core::posting::AmountSource;
+use core::posting::*;
 use core::price::*;
 use core::symbol::*;
 use core::header::*;
@@ -328,7 +328,7 @@ pub fn parse_pricedb(file_path: &str) -> Vec<Price> {
     }
 }
 
-pub fn parse_ledger(file_path: &str) -> Vec<ParseTree> {
+pub fn parse_ledger(file_path: &str) -> (i32, Vec<Posting>, Vec<Price>) {
     let mut file = File::open(file_path).ok().expect("Failed to open file");
     let mut contents = String::new();
 
@@ -336,9 +336,30 @@ pub fn parse_ledger(file_path: &str) -> Vec<ParseTree> {
 
     let result = parser(ledger).parse(&contents[..]);
 
+    let mut postings = Vec::new();
+    let mut prices = Vec::new();
+    let mut num_transactions = 0;
+
     // TODO: Should return result value rather than panic here
     match result {
-        Ok((tree, _)) => tree,
+        Ok((tree, _)) => {
+            for node in tree.into_iter() {
+                match node {
+                    ParseTree::Transaction(tx) => {
+                        num_transactions += 1;
+                        match tx.into_postings() {
+                            Ok(mut tx_postings) => { postings.append(&mut tx_postings); },
+                            Err(err) => panic!("{}", err),
+                        };
+                    },
+                    ParseTree::Price(p) => {
+                        prices.push(p);
+                    }
+                };
+            };
+
+            (num_transactions, postings, prices)
+        },
         Err(err) => panic!("{}", err),
     }
 }
